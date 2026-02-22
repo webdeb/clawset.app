@@ -72,8 +72,8 @@ export function AppLayout() {
       >
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
-            <h1 className="text-lg font-bold leading-none">OpenClaw</h1>
-            <p className="text-[10px] text-default-500">Sandboxed Environment</p>
+            <h1 className="text-lg font-bold leading-none">clawset.app</h1>
+            <p className="text-[10px] text-default-500">Secure OpenClaw Environment</p>
           </div>
 
           {!isMultipassInstalled ? (
