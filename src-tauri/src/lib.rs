@@ -234,6 +234,17 @@ async fn install_openclaw(instance_name: &str, shared_folder: &str) -> Result<()
     Ok(())
 }
 
+#[tauri::command]
+fn set_webview_url(app: tauri::AppHandle, label: &str, url: &str) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(webview) = app.get_webview(label) {
+        webview.eval(&format!("window.location.replace('{}');", url)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err(format!("Webview {} not found", label))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -247,7 +258,8 @@ pub fn run() {
             get_instance_ip,
             get_openclaw_token,
             start_openclaw,
-            install_openclaw
+            install_openclaw,
+            set_webview_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

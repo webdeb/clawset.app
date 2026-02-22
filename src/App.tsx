@@ -1,10 +1,22 @@
-import { OpenClawDashboard } from "./components/OpenClawDashboard";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { AppLayout } from "./components/AppLayout";
+import { InfoContent } from "./components/InfoContent";
+import { ConfigContent } from "./components/ConfigContent";
+import { DashboardContentRouteWrapper } from "./components/DashboardContent";
+import { MultipassProvider } from "./context/MultipassContext";
 
 function App() {
   return (
-    <main className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 gap-8">
-      <OpenClawDashboard />
-    </main>
+    <MultipassProvider>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/info/:instanceId" element={<InfoContent />} />
+          <Route path="/config/:instanceId" element={<ConfigContent />} />
+          <Route path="/dashboard/:instanceId" element={<DashboardContentRouteWrapper />} />
+        </Route>
+      </Routes>
+    </MultipassProvider>
   );
 }
 
