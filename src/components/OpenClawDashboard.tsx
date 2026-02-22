@@ -49,7 +49,6 @@ export function OpenClawDashboard() {
             const ip = await invoke<string>("get_instance_ip", { instanceName: targetInstance });
             setInstanceIp(ip);
             const token = await invoke<string>("get_openclaw_token", { instanceName: targetInstance });
-            console.log("Token:", token);
             setInstanceToken(token);
           } catch (e) {
             console.error("Failed to fetch instance IP or token", e);
