@@ -123,7 +123,8 @@ openclaw --version || echo 'NOT_FOUND'
 echo '===OPENCLAW_STATUS==='
 openclaw status || echo 'NOT_FOUND'
 echo '===OPENCLAW_JSON==='
-cat /home/ubuntu/clawset/openclaw-config/openclaw.json || echo 'NOT_FOUND'
+CONFIG_PATH=\"${OPENCLAW_CONFIG_PATH:-/home/ubuntu/clawset/openclaw/config/openclaw.json}\"
+cat \"$CONFIG_PATH\" || echo 'NOT_FOUND'
 ";
     match Command::new("multipass")
         .args(["exec", instance_name, "--", "bash", "-ic", script])

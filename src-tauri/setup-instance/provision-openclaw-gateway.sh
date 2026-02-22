@@ -8,7 +8,7 @@ set -euo pipefail
 # - Starts/restarts gateway
 
 BASE_DIR="${OPENCLAW_BASE_DIR:-$HOME/clawset}"
-CONFIG_DIR="$BASE_DIR/openclaw-config"
+CONFIG_DIR="$BASE_DIR/openclaw/config"
 CONFIG_PATH="$CONFIG_DIR/openclaw.json"
 PORT="${OPENCLAW_PORT:-18789}"
 BIND_MODE="${OPENCLAW_BIND_MODE:-lan}"                     # loopback|lan|tailnet

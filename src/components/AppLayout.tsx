@@ -67,7 +67,7 @@ export function AppLayout() {
     <div className="w-full h-screen flex flex-col bg-background text-foreground overflow-hidden">
       {/* Persistent Header */}
       <header 
-        className="flex flex-row items-center justify-between flex-shrink-0 w-full bg-default-50 border-b border-divider px-6 z-50 shadow-sm relative"
+        className="flex flex-row items-center justify-between flex-shrink-0 w-full bg-default-50 border-b border-divider px-6 z-50 relative"
         style={{ height: navbarHeight }}
       >
         <div className="flex items-center gap-6">
@@ -84,9 +84,8 @@ export function AppLayout() {
             <Tabs className="max-h-8">
               <Tabs.ListContainer>
                 <Tabs.List className="gap-6 shadow-none p-0 border-b-0 bg-transparent h-8">
-                  <Tabs.Tab href="#info" id="info">Info</Tabs.Tab>
-                  <Tabs.Tab href="#config" id="config">Config</Tabs.Tab>
                   <Tabs.Tab href="#dashboard" id="dashboard" isDisabled={openclawStatus !== "Running"}>Dashboard</Tabs.Tab>
+                  <Tabs.Tab href="#info" id="info">Info</Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>
