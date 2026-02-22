@@ -4,9 +4,17 @@ import { invoke } from "@tauri-apps/api/core";
 export type InstanceStatus = "Running" | "Stopped" | "NotInstalled" | "Unknown";
 
 export interface MultipassInstance {
+  // this data is available from multipass list
   name: string;
   ip: string;
+  ubuntuVersion?: string;
   status: InstanceStatus;
+  
+  // this data must be fetched from individual instance, or even from within the instance, so fetch only for selected instance.
+  hostPathFolder?: string;
+  memory?: string;
+  cpus?: string;
+  storage?: string;
   nodeInstalled?: string;
   openclawInstalled?: boolean;
   openclawRunning?: boolean;
@@ -36,40 +44,32 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchInstanceDetails = async (name: string): Promise<MultipassInstance> => {
+  const fetchInstanceDetails = async (name: string) => {
     try {
-      const statusResponse: string = await invoke("get_openclaw_status", { instanceName: name });
-      const parts = statusResponse.split("|");
+      const details: any = await invoke("get_multipass_instance_details", { instanceName: name });
       
-      let status: InstanceStatus = "Unknown";
-      let ip = "";
-      let token = undefined;
-
-      if (parts.length >= 2) {
-        status = parts[0] as InstanceStatus;
-        ip = parts[1];
-
-        if (status === "Running") {
-          try {
-             token = (await invoke("get_openclaw_token", { instanceName: name })) as string;
-          } catch(e: any) {
-             console.warn(`Could not retrieve token for ${name}:`, e.toString());
-          }
+      setInstances(prev => prev.map(inst => {
+        if (inst.name === name) {
+          return {
+            ...inst,
+            hostPathFolder: details.host_path_folder || undefined,
+            memory: details.memory || undefined,
+            cpus: details.cpus || undefined,
+            storage: details.storage || undefined,
+            nodeInstalled: details.node_installed || undefined,
+            openclawInstalled: details.openclaw_installed || false,
+            openclawRunning: details.openclaw_running || false,
+            openclawToken: details.openclaw_token || undefined,
+          };
         }
-      } else {
-        status = statusResponse as InstanceStatus;
-      }
-
-      return { name, ip, status, token };
+        return inst;
+      }));
     } catch (e: any) {
       console.error(`Error fetching details for ${name}:`, e);
-      return { name, ip: "", status: "Unknown" };
     }
   };
 
   const refreshInstances = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const checkCmd: boolean = await invoke("check_multipass");
       setIsMultipassInstalled(checkCmd);
@@ -79,44 +79,67 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const res: string[] = await invoke("list_multipass_instances");
-      const openclawNames = res.filter((name) => name.startsWith(""));
+      const res: any[] = await invoke("list_multipass_instances");
       
-      const detailedInstances = await Promise.all(openclawNames.map(fetchInstanceDetails));
-      setInstances(detailedInstances);
+      setInstances(prev => {
+        const newInstances = res.map(inst => {
+          const existing = prev.find(p => p.name === inst.name);
+          return {
+            ...existing,
+            name: inst.name,
+            ip: inst.ip,
+            status: inst.status,
+            ubuntuVersion: inst.ubuntu_version || undefined,
+          } as MultipassInstance;
+        });
 
-      // Restore selection preference
-      const storedPreference = localStorage.getItem(PREFERRED_INSTANCE_KEY);
-      if (openclawNames.length > 0) {
-        const initialInstance = storedPreference && openclawNames.includes(storedPreference)
-          ? storedPreference
-          : openclawNames[0];
-          
-        setSelectedInstance(initialInstance);
+        return newInstances;
+      });
+
+      // Handle default selection
+      if (res.length > 0) {
+        setSelectedInstance(currentSelected => {
+          const storedPreference = localStorage.getItem(PREFERRED_INSTANCE_KEY);
+          if (currentSelected && res.find(r => r.name === currentSelected)) {
+             return currentSelected;
+          }
+          if (storedPreference && res.find(r => r.name === storedPreference)) {
+             return storedPreference;
+          }
+          return res[0].name;
+        });
       } else {
         setSelectedInstance(null);
       }
-
+      
     } catch (e: any) {
       setError(e.toString());
     } finally {
-      setLoading(false);
+      if (loading) setLoading(false);
     }
   };
 
+  // Poll list and selected instance details every 10 seconds
   useEffect(() => {
     refreshInstances();
+    if (selectedInstance) {
+      fetchInstanceDetails(selectedInstance);
+    }
 
     const interval = setInterval(() => {
       refreshInstances();
+      if (selectedInstance) {
+        fetchInstanceDetails(selectedInstance);
+      }
     }, 10000); 
     
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedInstance]);
 
   const handleSetSelectedInstance = (name: string) => {
     setSelectedInstance(name);
     localStorage.setItem(PREFERRED_INSTANCE_KEY, name);
+    fetchInstanceDetails(name);
   };
 
   const installInstance = async (name: string, hostPath: string) => {
