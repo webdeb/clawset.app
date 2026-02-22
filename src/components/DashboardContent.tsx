@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
 import { Webview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
@@ -12,7 +11,6 @@ interface DashboardContentProps {
 
 export function DashboardContent({ url, navbarHeight }: DashboardContentProps) {
   const webviewRef = useRef<Webview | null>(null);
-  console.log("DashboardContent Props", { url, navbarHeight });
   useEffect(() => {
     let resizeListener: () => void;
 
@@ -73,12 +71,11 @@ export function DashboardContent({ url, navbarHeight }: DashboardContentProps) {
 }
 
 export function DashboardContentRouteWrapper() {
-  const { instanceId } = useParams();
-  const { instances, isMultipassInstalled } = useMultipass();
+  const { instances, selectedInstance, isMultipassInstalled } = useMultipass();
 
-  if (!isMultipassInstalled || !instanceId) return null;
+  if (!isMultipassInstalled || !selectedInstance) return null;
 
-  const instance = instances.find((i: any) => i.name === instanceId);
+  const instance = instances.find((i: any) => i.name === selectedInstance);
   
   if (!instance || instance.status !== "Running" || !instance.ip) {
     return (
@@ -88,7 +85,7 @@ export function DashboardContentRouteWrapper() {
     );
   }
 
-  const url = `http://${instance.ip}:18789${instance.token ? `/#token=${instance.token}` : ''}`;
+  const url = `http://${instance.ip}:18789${instance.openclawToken ? `/#token=${instance.openclawToken}` : ''}`;
 
   return <DashboardContent url={url} navbarHeight={90} />;
 }

@@ -1,14 +1,12 @@
-import { useEffect, useState } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { Outlet } from "react-router-dom";
 import { Button, Spinner, Select, ListBox, Tabs } from "@heroui/react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useMultipass } from "../context/MultipassContext";
 
-const navbarHeight = 90;
+const navbarHeight = 60;
 
 export function AppLayout() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { 
     isMultipassInstalled, 
     instances, 
@@ -20,37 +18,14 @@ export function AppLayout() {
     startInstance 
   } = useMultipass();
 
-  const [activeTab, setActiveTab] = useState<React.Key>("info");
   const [actionLoading, setActionLoading] = useState(false);
 
   const activeInstanceObj = instances.find(i => i.name === selectedInstance);
   const openclawStatus = activeInstanceObj ? activeInstanceObj.status : "Unknown";
 
-  // Sync tab status with Router path initially
-  useEffect(() => {
-    if (location.pathname.includes("/config")) setActiveTab("config");
-    else if (location.pathname.includes("/dashboard")) setActiveTab("dashboard");
-    else setActiveTab("info");
-  }, [location.pathname]);
-
-  const handleTabChange = (key: React.Key) => {
-    setActiveTab(key);
+  const handleInstallOpenclaw = async () => {
     if (!selectedInstance) return;
 
-    if (key === "info") navigate(`/info/${selectedInstance}`);
-    else if (key === "config") navigate(`/config/${selectedInstance}`);
-    else if (key === "dashboard") navigate(`/dashboard/${selectedInstance}`);
-  };
-
-  const handleInstanceSelection = (name: string) => {
-    setSelectedInstance(name);
-    // When instance changes, refresh the current route with the new instance ID
-    if (activeTab === "info") navigate(`/info/${name}`);
-    else if (activeTab === "config") navigate(`/config/${name}`);
-    else if (activeTab === "dashboard") navigate(`/dashboard/${name}`);
-  };
-
-  const handleInstallOpenclaw = async () => {
     setActionLoading(true);
     try {
       const selected = await openDialog({
@@ -64,7 +39,7 @@ export function AppLayout() {
         hostPathId = selected;
       }
 
-      await installInstance(selectedInstance || "openclaw-default", hostPathId);
+      await installInstance(selectedInstance, hostPathId);
     } finally {
       setActionLoading(false);
     }
@@ -106,16 +81,12 @@ export function AppLayout() {
                Multipass missing
              </div>
           ) : (
-            <Tabs 
-              selectedKey={activeTab as string} 
-              onSelectionChange={handleTabChange} 
-              className="max-h-8"
-            >
+            <Tabs className="max-h-8">
               <Tabs.ListContainer>
                 <Tabs.List className="gap-6 shadow-none p-0 border-b-0 bg-transparent h-8">
-                  <Tabs.Tab id="info">Info</Tabs.Tab>
-                  <Tabs.Tab id="config">Config</Tabs.Tab>
-                  <Tabs.Tab id="dashboard" isDisabled={openclawStatus !== "Running"}>Dashboard</Tabs.Tab>
+                  <Tabs.Tab href="#info" id="info">Info</Tabs.Tab>
+                  <Tabs.Tab href="#config" id="config">Config</Tabs.Tab>
+                  <Tabs.Tab href="#dashboard" id="dashboard" isDisabled={openclawStatus !== "Running"}>Dashboard</Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>
@@ -124,9 +95,9 @@ export function AppLayout() {
 
         {isMultipassInstalled && (
           <div className="flex items-center gap-4">
-            {openclawStatus === "NotInstalled" && (
+            {instances.length === 0 && (
               <Button variant="ghost" size="sm" isPending={actionLoading} onPress={handleInstallOpenclaw} className="h-8 min-h-8 text-xs">
-                Install {selectedInstance || "Instance"}
+                Install Default Instance
               </Button>
             )}
             {openclawStatus === "Stopped" && (
@@ -139,7 +110,7 @@ export function AppLayout() {
               <Select 
                 value={selectedInstance}
                 onChange={(key) => {
-                  if (key && typeof key === "string") handleInstanceSelection(key);
+                  if (key && typeof key === "string") setSelectedInstance(key);
                 }}
                 className="w-40"
                 aria-label="Select Instance"
@@ -165,7 +136,7 @@ export function AppLayout() {
                <span className="font-bold flex items-center gap-1.5 text-xs leading-none">
                  {openclawStatus === "Running" && <span className="w-2 h-2 rounded-full bg-success"></span>}
                  {openclawStatus === "Stopped" && <span className="w-2 h-2 rounded-full bg-danger"></span>}
-                 {actionLoading ? <Spinner size="sm"/> : (openclawStatus === "Running" ? "Running" : openclawStatus === "Stopped" ? "Stopped" : openclawStatus)}
+                 {actionLoading ? <Spinner size="sm"/> : (!activeInstanceObj ? "No Instance" : openclawStatus === "Running" ? "Running" : openclawStatus === "Stopped" ? "Stopped" : openclawStatus)}
                </span>
             </div>
             
