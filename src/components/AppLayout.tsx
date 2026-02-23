@@ -13,20 +13,21 @@ export function AppLayout() {
     selectedInstance, 
     loading, 
     error, 
-    setSelectedInstance, 
+    setSelectedInstanceName, 
     installInstance, 
     startInstance 
   } = useMultipass();
 
   const [actionLoading, setActionLoading] = useState(false);
 
-  const activeInstanceObj = instances.find(i => i.name === selectedInstance);
-  const openclawStatus = activeInstanceObj ? activeInstanceObj.status : "Unknown";
+  const openclawStatus = selectedInstance ? selectedInstance.status : "Unknown";
 
   const handleInstallOpenclaw = async () => {
-    if (!selectedInstance) return;
+    // Determine the instance name to use based on whatever fallback or config is needed
+    // Usually this is the default instance if instances.length === 0
+    // But since selectedInstance might be null when instances.length = 0, we can hardcode for fallback
+    const targetName = selectedInstance?.name || "primary";
 
-    setActionLoading(true);
     try {
       const selected = await openDialog({
         title: 'Select Target Folder for Clawset Data mapping',
@@ -34,12 +35,24 @@ export function AppLayout() {
         multiple: false,
       });
 
+      if (!selected) {
+        return; // handle cancellation
+      }
+
       let hostPathId = "";
-      if (selected && !Array.isArray(selected)) {
+      if (Array.isArray(selected)) {
+        hostPathId = selected.length > 0 ? selected[0] : "";
+      } else {
         hostPathId = selected;
       }
 
-      await installInstance(selectedInstance, hostPathId);
+      if (!hostPathId) return;
+
+      setActionLoading(true);
+
+      await installInstance(targetName, hostPathId);
+    } catch (e) {
+      console.error(e);
     } finally {
       setActionLoading(false);
     }
@@ -49,7 +62,7 @@ export function AppLayout() {
     if (!selectedInstance) return;
     setActionLoading(true);
     try {
-      await startInstance(selectedInstance);
+      await startInstance(selectedInstance.name);
     } finally {
       setActionLoading(false);
     }
@@ -107,9 +120,9 @@ export function AppLayout() {
 
             {instances.length > 0 && selectedInstance && (
               <Select 
-                value={selectedInstance}
+                value={selectedInstance.name}
                 onChange={(key) => {
-                  if (key && typeof key === "string") setSelectedInstance(key);
+                  if (key && typeof key === "string") setSelectedInstanceName(key);
                 }}
                 className="w-40"
                 aria-label="Select Instance"
@@ -135,7 +148,7 @@ export function AppLayout() {
                <span className="font-bold flex items-center gap-1.5 text-xs leading-none">
                  {openclawStatus === "Running" && <span className="w-2 h-2 rounded-full bg-success"></span>}
                  {openclawStatus === "Stopped" && <span className="w-2 h-2 rounded-full bg-danger"></span>}
-                 {actionLoading ? <Spinner size="sm"/> : (!activeInstanceObj ? "No Instance" : openclawStatus === "Running" ? "Running" : openclawStatus === "Stopped" ? "Stopped" : openclawStatus)}
+                 {actionLoading ? <Spinner size="sm"/> : (!selectedInstance ? "No Instance" : openclawStatus === "Running" ? "Running" : openclawStatus === "Stopped" ? "Stopped" : openclawStatus)}
                </span>
             </div>
             

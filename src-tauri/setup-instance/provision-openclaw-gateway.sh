@@ -55,8 +55,8 @@ append_if_missing "$HOME/.bashrc" "export PATH=\"$HOME/.npm-global/bin:\$PATH\""
 log "Persisting OpenClaw env vars in ~/.bashrc"
 append_if_missing "$HOME/.bashrc" ""
 append_if_missing "$HOME/.bashrc" "# OpenClaw custom paths"
-append_if_missing "$HOME/.bashrc" "export OPENCLAW_CONFIG_PATH=\"$HOME/clawset/openclaw-config/openclaw.json\""
-append_if_missing "$HOME/.bashrc" "export OPENCLAW_STATE_DIR=\"$HOME/clawset/openclaw-config\""
+append_if_missing "$HOME/.bashrc" "export OPENCLAW_CONFIG_PATH=\"$HOME/clawset/openclaw/config/openclaw.json\""
+append_if_missing "$HOME/.bashrc" "export OPENCLAW_STATE_DIR=\"$HOME/clawset/openclaw/config\""
 append_if_missing "$HOME/.bashrc" "export OPENCLAW_WORKSPACE=\"$HOME/clawset\""
 
 # For this run
@@ -67,9 +67,10 @@ export OPENCLAW_WORKSPACE="$BASE_DIR"
 log "Installing/Updating OpenClaw"
 ARCH="$(uname -m)"
 if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
-  export CFLAGS='-DOPUS_ARM_MAY_HAVE_NEON_INTR'
+  CFLAGS='-DOPUS_ARM_MAY_HAVE_NEON_INTR' npm i -g openclaw@latest --verbose
+else
+  npm i -g openclaw@latest --verbose
 fi
-npm i -g openclaw@latest
 
 require_cmd openclaw
 

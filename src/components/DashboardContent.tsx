@@ -71,13 +71,11 @@ export function DashboardContent({ url, navbarHeight }: DashboardContentProps) {
 }
 
 export function DashboardContentRouteWrapper() {
-  const { instances, selectedInstance, isMultipassInstalled } = useMultipass();
+  const { selectedInstance, isMultipassInstalled } = useMultipass();
 
   if (!isMultipassInstalled || !selectedInstance) return null;
-
-  const instance = instances.find((i: any) => i.name === selectedInstance);
   
-  if (!instance || instance.status !== "Running" || !instance.ip) {
+  if (selectedInstance.status !== "Running" || !selectedInstance.ip) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-default-500">
         <p>Instance is not running or IP is unavailable.</p>
@@ -85,7 +83,7 @@ export function DashboardContentRouteWrapper() {
     );
   }
 
-  const url = `http://${instance.ip}:18789${instance.openclawToken ? `/#token=${instance.openclawToken}` : ''}`;
+  const url = `http://${selectedInstance.ip}:18789${selectedInstance.openclawToken ? `/#token=${selectedInstance.openclawToken}` : ''}`;
 
   return <DashboardContent url={url} navbarHeight={90} />;
 }

@@ -9,7 +9,7 @@ NODE_MAJOR="22"
 
 echo "==> Update apt and install prerequisites..."
 sudo apt-get update -y
-sudo apt-get install -y ca-certificates curl gnupg
+sudo apt-get install -y ca-certificates curl gnupg make g++ python3 pkg-config
 
 echo "==> Add NodeSource repo for Node.js ${NODE_MAJOR}.x..."
 curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | sudo -E bash -

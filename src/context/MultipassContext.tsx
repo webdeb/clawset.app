@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export type InstanceStatus = "Running" | "Stopped" | "NotInstalled" | "Unknown";
 
@@ -24,12 +25,16 @@ export interface MultipassInstance {
 interface MultipassContextType {
   isMultipassInstalled: boolean;
   instances: MultipassInstance[];
-  selectedInstance: string | null;
+  selectedInstanceName: string | null;
+  selectedInstance: MultipassInstance | null;
   loading: boolean;
   error: string | null;
-  setSelectedInstance: (name: string) => void;
+  setSelectedInstanceName: (name: string) => void;
   refreshInstances: () => Promise<void>;
+  isProvisioning: boolean;
+  provisionLogs: string[];
   installInstance: (name: string, hostPath: string) => Promise<void>;
+  setupExistingInstance: (name: string, hostPath: string) => Promise<void>;
   startInstance: (name: string) => Promise<void>;
 }
 
@@ -39,10 +44,24 @@ const PREFERRED_INSTANCE_KEY = "clawset_preferred_instance";
 
 export function MultipassProvider({ children }: { children: ReactNode }) {
   const [isMultipassInstalled, setIsMultipassInstalled] = useState(true);
+  const [isProvisioning, setIsProvisioning] = useState(false);
   const [instances, setInstances] = useState<MultipassInstance[]>([]);
-  const [selectedInstance, setSelectedInstance] = useState<string | null>(null);
+  const [selectedInstanceName, setSelectedInstanceName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [provisionLogs, setProvisionLogs] = useState<string[]>([]);
+
+  const selectedInstance = instances.find(inst => inst.name === selectedInstanceName) || null;
+
+  useEffect(() => {
+    const unlisten = listen<string>("provision-log", (event) => {
+      setProvisionLogs(prev => [...prev, event.payload]);
+    });
+
+    return () => {
+      unlisten.then(f => f());
+    };
+  }, []);
 
   const fetchInstanceDetails = async (name: string) => {
     try {
@@ -98,7 +117,7 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
 
       // Handle default selection
       if (res.length > 0) {
-        setSelectedInstance(currentSelected => {
+        setSelectedInstanceName(currentSelected => {
           const storedPreference = localStorage.getItem(PREFERRED_INSTANCE_KEY);
           if (currentSelected && res.find(r => r.name === currentSelected)) {
              return currentSelected;
@@ -109,7 +128,7 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
           return res[0].name;
         });
       } else {
-        setSelectedInstance(null);
+        setSelectedInstanceName(null);
       }
       
     } catch (e: any) {
@@ -121,37 +140,61 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
 
   // Poll list and selected instance details every 10 seconds
   useEffect(() => {
-    refreshInstances();
-    if (selectedInstance) {
-      fetchInstanceDetails(selectedInstance);
+    const refresh = async () => {
+      await refreshInstances();
+      if (selectedInstanceName) {
+        await fetchInstanceDetails(selectedInstanceName);
+      }
     }
 
-    const interval = setInterval(() => {
-      refreshInstances();
-      if (selectedInstance) {
-        fetchInstanceDetails(selectedInstance);
-      }
-    }, 10000); 
+    refresh();
+    const interval = setInterval(refresh, 10000); 
     
     return () => clearInterval(interval);
-  }, [selectedInstance]);
+  }, [selectedInstanceName]);
 
   const handleSetSelectedInstance = (name: string) => {
-    setSelectedInstance(name);
+    setSelectedInstanceName(name);
     localStorage.setItem(PREFERRED_INSTANCE_KEY, name);
     fetchInstanceDetails(name);
   };
 
   const installInstance = async (name: string, hostPath: string) => {
     setLoading(true);
+    setProvisionLogs([]); // Clear previous logs
     try {
       await invoke("install_openclaw", { instanceName: name, sharedFolder: hostPath });
       await refreshInstances();
       handleSetSelectedInstance(name);
+    } catch (error: any) {
+      setProvisionLogs(prev => [...prev, `ERROR: ${error}`]);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
+
+  const setupExistingInstance = async (name: string, hostPath: string) => {
+    setIsProvisioning(true);
+    setLoading(true);
+    setProvisionLogs([]); // Clear previous logs
+    try {
+      await invoke("setup_existing_instance", { instanceName: name, sharedFolder: hostPath });
+      await refreshInstances();
+      handleSetSelectedInstance(name);
+    } catch (error: any) {
+      setProvisionLogs(prev => [...prev, `ERROR: ${error}`]);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isProvisioning && selectedInstance) {
+      
+    }
+  }, [isProvisioning]);
 
   const startInstance = async (name: string) => {
     setLoading(true);
@@ -167,11 +210,15 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     isMultipassInstalled,
     instances,
     selectedInstance,
+    selectedInstanceName,
     loading,
     error,
-    setSelectedInstance: handleSetSelectedInstance,
+    setSelectedInstanceName: handleSetSelectedInstance,
     refreshInstances,
+    provisionLogs,
     installInstance,
+    isProvisioning,
+    setupExistingInstance,
     startInstance
   };
 

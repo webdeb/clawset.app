@@ -1,5 +1,7 @@
 use serde_json::Value;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
+use tauri::Emitter;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -198,111 +200,127 @@ async fn start_openclaw(instance_name: &str) -> Result<(), String> {
     }
 }
 
+fn run_and_stream(app: &tauri::AppHandle, mut command: Command, error_prefix: &str) -> Result<(), String> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let mut child = command.spawn().map_err(|e| format!("{}: {}", error_prefix, e))?;
+
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    let app_clone_out = app.clone();
+    let out_thread = std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(l) = line {
+                let _ = app_clone_out.emit("provision-log", l);
+            }
+        }
+    });
+
+    let app_clone_err = app.clone();
+    let err_thread = std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(l) = line {
+                let _ = app_clone_err.emit("provision-log", format!("ERROR: {}", l));
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| format!("{}: {}", error_prefix, e))?;
+    out_thread.join().unwrap();
+    err_thread.join().unwrap();
+
+    if !status.success() {
+        return Err(format!("{} exited with status: {}", error_prefix, status));
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
-async fn install_openclaw(instance_name: &str, shared_folder: &str) -> Result<(), String> {
+async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared_folder: &str) -> Result<(), String> {
+    let _ = app.emit("provision-log", format!("Starting setup for {}", instance_name));
+
     // 1. Copy default configurations into the shared folder before mounting
     // We assume the user runs the app from its root directory in dev, or it's bundled.
     // For simplicity, we execute a shell command to copy the default config.
     // Replace with standard robust copy logic using std::fs if this needs to be production ready.
+    let _ = app.emit("provision-log", "Copying default configurations...".to_string());
     let _ = Command::new("cp")
         .args(["-r", "setup-instance/default-config/clawset/.", shared_folder])
         .output();
 
     // 2. Launch an Ubuntu LTS instance with the designated name, 2G RAM and 10G Disk
-    let launch = Command::new("multipass")
-        .args([
-            "launch",
-            "lts",
-            "--name",
-            instance_name,
-            "--memory",
-            "2G",
-            "--disk",
-            "10G",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !launch.status.success() {
-        return Err(format!(
-            "Failed to launch instance: {}",
-            String::from_utf8_lossy(&launch.stderr)
-        ));
-    }
+    let _ = app.emit("provision-log", "Launching Ubuntu LTS instance (this may take a while)...".to_string());
+    let mut launch = Command::new("multipass");
+    launch.args([
+        "launch",
+        "lts",
+        "--name",
+        instance_name,
+        "--memory",
+        "2G",
+        "--disk",
+        "10G",
+    ]);
+    run_and_stream(&app, launch, "Failed to launch instance")?;
 
     // 3. Mount the shared folder into the VM at /home/ubuntu/clawset
-    let mount = Command::new("multipass")
-        .args([
-            "mount",
-            shared_folder,
-            &format!("{}:/home/ubuntu/clawset", instance_name),
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !mount.status.success() {
-        return Err(format!(
-            "Failed to mount shared folder: {}",
-            String::from_utf8_lossy(&mount.stderr)
-        ));
+    let _ = app.emit("provision-log", format!("Mounting shared folder to {}:/home/ubuntu/clawset...", instance_name));
+    let mut mount = Command::new("multipass");
+    mount.args([
+        "mount",
+        shared_folder,
+        &format!("{}:/home/ubuntu/clawset", instance_name),
+    ]);
+    if let Err(e) = run_and_stream(&app, mount, "Failed to mount shared folder") {
+         let _ = app.emit("provision-log", format!("Mount warning: {}", e));
     }
 
     // 4. Transfer provisioning scripts to the VM
-    Command::new("multipass")
-        .args([
-            "transfer",
-            "setup-instance/node-provision.sh",
-            &format!("{}:node-provision.sh", instance_name),
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let _ = app.emit("provision-log", "Transferring provisioning scripts...".to_string());
+    let mut transfer1 = Command::new("multipass");
+    transfer1.args([
+        "transfer",
+        "setup-instance/node-provision.sh",
+        &format!("{}:node-provision.sh", instance_name),
+    ]);
+    run_and_stream(&app, transfer1, "Failed to transfer node-provision.sh")?;
 
-    Command::new("multipass")
-        .args([
-            "transfer",
-            "setup-instance/provision-openclaw-gateway.sh",
-            &format!("{}:provision-openclaw-gateway.sh", instance_name),
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut transfer2 = Command::new("multipass");
+    transfer2.args([
+        "transfer",
+        "setup-instance/provision-openclaw-gateway.sh",
+        &format!("{}:provision-openclaw-gateway.sh", instance_name),
+    ]);
+    run_and_stream(&app, transfer2, "Failed to transfer provision-openclaw-gateway.sh")?;
 
     // 5. Execute provisioning scripts inside the VM
-    let provision = Command::new("multipass")
-        .args([
-            "exec",
-            instance_name,
-            "--",
-            "bash",
-            "node-provision.sh",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let _ = app.emit("provision-log", "Running node provisioning script...".to_string());
+    let mut provision = Command::new("multipass");
+    provision.args([
+        "exec",
+        instance_name,
+        "--",
+        "bash",
+        "node-provision.sh",
+    ]);
+    run_and_stream(&app, provision, "Failed to run node provisioning")?;
 
-    if !provision.status.success() {
-        return Err(format!(
-            "Failed to run node provisioning: {}",
-            String::from_utf8_lossy(&provision.stderr)
-        ));
-    }
+    let _ = app.emit("provision-log", "Running OpenClaw setup script...".to_string());
+    let mut setup = Command::new("multipass");
+    setup.args([
+        "exec",
+        instance_name,
+        "--",
+        "bash",
+        "provision-openclaw-gateway.sh",
+    ]);
+    run_and_stream(&app, setup, "Failed to run openclaw setup")?;
 
-    let setup = Command::new("multipass")
-        .args([
-            "exec",
-            instance_name,
-            "--",
-            "bash",
-            "provision-openclaw-gateway.sh",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !setup.status.success() {
-        return Err(format!(
-            "Failed to run openclaw setup: {}",
-            String::from_utf8_lossy(&setup.stderr)
-        ));
-    }
-
+    let _ = app.emit("provision-log", "Installation complete!".to_string());
     Ok(())
 }
 
@@ -317,6 +335,75 @@ fn set_webview_url(app: tauri::AppHandle, label: &str, url: &str) -> Result<(), 
     }
 }
 
+#[tauri::command]
+async fn setup_existing_instance(app: tauri::AppHandle, instance_name: &str, shared_folder: &str) -> Result<(), String> {
+    let _ = app.emit("provision-log", format!("Starting existing instance setup for {}", instance_name));
+    
+    // 1. Copy default configurations into the shared folder before mounting
+    let _ = app.emit("provision-log", "Copying default configurations...".to_string());
+    let _ = Command::new("cp")
+        .args(["-r", "setup-instance/default-config/clawset/.", shared_folder])
+        .output();
+
+    // 2. Mount the shared folder if it's not already mounted (or at least try)
+    // We ignore errors here because it might already be mounted
+    let _ = app.emit("provision-log", format!("Mounting shared folder to {}:/home/ubuntu/clawset...", instance_name));
+    let mut mount = Command::new("multipass");
+    mount.args([
+        "mount",
+        shared_folder,
+        &format!("{}:/home/ubuntu/clawset", instance_name),
+    ]);
+
+    if let Err(e) = run_and_stream(&app, mount, "Failed to mount shared folder") {
+         let _ = app.emit("provision-log", format!("Mount warning: {}", e));
+    }
+
+    // 3. Transfer provisioning scripts to the VM
+    let _ = app.emit("provision-log", "Transferring provisioning scripts...".to_string());
+    let mut transfer1 = Command::new("multipass");
+    transfer1.args([
+        "transfer",
+        "setup-instance/node-provision.sh",
+        &format!("{}:node-provision.sh", instance_name),
+    ]);
+    run_and_stream(&app, transfer1, "Failed to transfer node-provision.sh")?;
+
+    let mut transfer2 = Command::new("multipass");
+    transfer2.args([
+        "transfer",
+        "setup-instance/provision-openclaw-gateway.sh",
+        &format!("{}:provision-openclaw-gateway.sh", instance_name),
+    ]);
+    run_and_stream(&app, transfer2, "Failed to transfer provision-openclaw-gateway.sh")?;
+
+    // 4. Execute provisioning scripts inside the VM
+    let _ = app.emit("provision-log", "Running node provisioning script...".to_string());
+    let mut provision = Command::new("multipass");
+    provision.args([
+        "exec",
+        instance_name,
+        "--",
+        "bash",
+        "node-provision.sh",
+    ]);
+    run_and_stream(&app, provision, "Failed to run node provisioning")?;
+
+    let _ = app.emit("provision-log", "Running OpenClaw setup script...".to_string());
+    let mut setup = Command::new("multipass");
+    setup.args([
+        "exec",
+        instance_name,
+        "--",
+        "bash",
+        "provision-openclaw-gateway.sh",
+    ]);
+    run_and_stream(&app, setup, "Failed to run openclaw setup")?;
+
+    let _ = app.emit("provision-log", "Installation complete!".to_string());
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -329,6 +416,7 @@ pub fn run() {
             get_multipass_instance_details,
             start_openclaw,
             install_openclaw,
+            setup_existing_instance,
             set_webview_url
         ])
         .run(tauri::generate_context!())
