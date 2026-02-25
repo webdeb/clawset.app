@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { InfoContent } from "./components/InfoContent";
+import { InstanceContent } from "./components/InstanceContent";
 import { ConfigContent } from "./components/ConfigContent";
 import { AppLayout } from "./components/AppLayout";
 import { DashboardContentRouteWrapper } from "./components/DashboardContent";
@@ -11,7 +11,7 @@ function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/info" element={<InfoContent />} />
+          <Route path="/instance" element={<InstanceContent />} />
           <Route path="/config" element={<ConfigContent />} />
           <Route path="/dashboard" element={<DashboardContentRouteWrapper />} />
         </Route>

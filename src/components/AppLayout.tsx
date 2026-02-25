@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Button, Spinner, Select, ListBox, Tabs } from "@heroui/react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useMultipass } from "../context/MultipassContext";
 
 const navbarHeight = 60;
@@ -14,7 +13,6 @@ export function AppLayout() {
     loading, 
     error, 
     setSelectedInstanceName, 
-    installInstance, 
     startInstance 
   } = useMultipass();
 
@@ -22,41 +20,6 @@ export function AppLayout() {
 
   const openclawStatus = selectedInstance ? selectedInstance.status : "Unknown";
 
-  const handleInstallOpenclaw = async () => {
-    // Determine the instance name to use based on whatever fallback or config is needed
-    // Usually this is the default instance if instances.length === 0
-    // But since selectedInstance might be null when instances.length = 0, we can hardcode for fallback
-    const targetName = selectedInstance?.name || "primary";
-
-    try {
-      const selected = await openDialog({
-        title: 'Select Target Folder for Clawset Data mapping',
-        directory: true,
-        multiple: false,
-      });
-
-      if (!selected) {
-        return; // handle cancellation
-      }
-
-      let hostPathId = "";
-      if (Array.isArray(selected)) {
-        hostPathId = selected.length > 0 ? selected[0] : "";
-      } else {
-        hostPathId = selected;
-      }
-
-      if (!hostPathId) return;
-
-      setActionLoading(true);
-
-      await installInstance(targetName, hostPathId);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleStartInstance = async () => {
     if (!selectedInstance) return;
@@ -98,7 +61,7 @@ export function AppLayout() {
               <Tabs.ListContainer>
                 <Tabs.List className="gap-6 shadow-none p-0 border-b-0 bg-transparent h-8">
                   <Tabs.Tab href="#dashboard" id="dashboard" isDisabled={openclawStatus !== "Running"}>Dashboard</Tabs.Tab>
-                  <Tabs.Tab href="#info" id="info">Info</Tabs.Tab>
+                  <Tabs.Tab href="#instance" id="instance">Instance</Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>
@@ -108,7 +71,7 @@ export function AppLayout() {
         {isMultipassInstalled && (
           <div className="flex items-center gap-4">
             {instances.length === 0 && (
-              <Button variant="ghost" size="sm" isPending={actionLoading} onPress={handleInstallOpenclaw} className="h-8 min-h-8 text-xs">
+              <Button variant="ghost" size="sm" isPending={actionLoading} onPress={() => window.location.hash = "#/instance"} className="h-8 min-h-8 text-xs">
                 Install Default Instance
               </Button>
             )}

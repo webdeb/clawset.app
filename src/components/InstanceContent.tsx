@@ -1,12 +1,17 @@
 import { Card, Chip, Button, Spinner } from "@heroui/react";
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useMultipass } from "../context/MultipassContext";
 
-export function InfoContent() {
-  const { selectedInstance, setupExistingInstance, provisionLogs, isProvisioning } = useMultipass();
-  const [actionLoading, setActionLoading] = useState(false);
+import { InstanceProvision } from "./InstanceProvision";
+
+export function InstanceContent() {
+  const { selectedInstance, setupExistingInstance, provisionLogs, provisioningInstanceName } = useMultipass();
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const isThisInstanceProvisioning = 
+    provisioningInstanceName === selectedInstance?.name || 
+    selectedInstance?.isProvisioning === true;
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -40,24 +45,14 @@ export function InfoContent() {
 
       if (!finalHostPath) return;
 
-      setActionLoading(true);
-
       await setupExistingInstance(selectedInstance.name, finalHostPath);
     } catch (e) {
       console.error(e);
-    } finally {
-      setActionLoading(false);
     }
   };
   
   if (!selectedInstance) {
-    return (
-      <div className="w-screen h-screen flex items-center justify-center bg-background text-foreground p-8">
-        <Card className="p-6 w-full max-w-lg">
-          <p className="text-default-500 text-center">Instance not found or loading...</p>
-        </Card>
-      </div>
-    );
+    return <InstanceProvision />;
   }
 
   return (
@@ -95,20 +90,15 @@ export function InfoContent() {
         <div className="flex flex-col gap-3 mt-2">
           <h3 className="text-sm font-semibold border-b pb-2 uppercase tracking-wide text-default-600 flex justify-between items-center">
             <span>Environment Status</span>
-            {actionLoading && <Spinner size="sm" color="current" className="text-secondary" />}
+            {isThisInstanceProvisioning && <Spinner size="sm" color="current" className="text-secondary" />}
           </h3>
           
-          {isProvisioning ? (
+          {isThisInstanceProvisioning ? (
             <div className="flex flex-col gap-2 mt-2 bg-default-50 border border-default-200 p-3 rounded-lg shadow-sm">
               <div className="flex justify-between items-center mb-1">
-                 <span className={`text-xs font-semibold ${actionLoading ? 'text-secondary animate-pulse' : 'text-default-500'}`}>
-                    {actionLoading ? "Installing Node & OpenClaw..." : "Provisioning Finished"}
+                 <span className={`text-xs font-semibold ${isThisInstanceProvisioning ? 'text-secondary animate-pulse' : 'text-default-500'}`}>
+                    {isThisInstanceProvisioning ? "Provisioning Environment..." : "Provisioning Finished"}
                  </span>
-                 {/* {!actionLoading && (
-                    <Button size="sm" variant="ghost" className="h-6 min-h-6 text-[10px]">
-                       Close Logs
-                    </Button>
-                 )} */}
               </div>
               <div className="w-full bg-black/90 rounded p-3 font-mono text-[10px] sm:text-xs text-green-400 overflow-y-auto h-48 border border-default-200/20 shadow-inner text-left whitespace-pre-wrap flex flex-col gap-1">
                 {provisionLogs.length === 0 ? (
@@ -136,7 +126,13 @@ export function InfoContent() {
                 <span className="text-default-600 text-sm">OpenClaw Installed</span>
                 <div className="flex items-center gap-2">
                   {!selectedInstance.openclawInstalled && (
-                    <Button size="sm" variant="ghost" className="bg-secondary/10 text-secondary" onPress={handleSetupExistingInstance}>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="bg-secondary/10 text-secondary" 
+                      onPress={handleSetupExistingInstance}
+                      isDisabled={provisioningInstanceName !== null || selectedInstance.isProvisioning} // disable if ANY instance is provisioning or this one is
+                    >
                       Install Node & OpenClaw
                     </Button>
                   )}

@@ -27,6 +27,7 @@ pub struct MultipassInstanceDetails {
     openclaw_installed: Option<bool>,
     openclaw_running: Option<bool>,
     openclaw_token: Option<String>,
+    is_provisioning: Option<bool>,
 }
 
 #[tauri::command]
@@ -127,6 +128,8 @@ openclaw status || echo 'NOT_FOUND'
 echo '===OPENCLAW_JSON==='
 CONFIG_PATH=\"${OPENCLAW_CONFIG_PATH:-/home/ubuntu/clawset/openclaw/config/openclaw.json}\"
 cat \"$CONFIG_PATH\" || echo 'NOT_FOUND'
+echo '===PROVISIONING==='
+if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
 ";
     match Command::new("multipass")
         .args(["exec", instance_name, "--", "bash", "-ic", script])
@@ -144,6 +147,7 @@ cat \"$CONFIG_PATH\" || echo 'NOT_FOUND'
                     if trim == "===OPENCLAW_VER===" { section = "openclaw_ver"; continue; }
                     if trim == "===OPENCLAW_STATUS===" { section = "openclaw_status"; continue; }
                     if trim == "===OPENCLAW_JSON===" { section = "openclaw_json"; continue; }
+                    if trim == "===PROVISIONING===" { section = "provisioning"; continue; }
                     
                     match section {
                         "node" => {
@@ -167,6 +171,13 @@ cat \"$CONFIG_PATH\" || echo 'NOT_FOUND'
                                 json_str.push('\n');
                             }
                         }
+                        "provisioning" => {
+                            if trim == "YES" {
+                                details.is_provisioning = Some(true);
+                            } else if trim == "NO" {
+                                details.is_provisioning = Some(false);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -184,6 +195,21 @@ cat \"$CONFIG_PATH\" || echo 'NOT_FOUND'
     }
 
     Ok(details)
+}
+
+#[tauri::command]
+async fn read_provision_log(instance_name: &str) -> Result<String, String> {
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "cat", "/tmp/provision.log"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        // Log doesn't exist yet or other error, return empty string
+        Ok(String::new())
+    }
 }
 
 #[tauri::command]
@@ -240,7 +266,7 @@ fn run_and_stream(app: &tauri::AppHandle, mut command: Command, error_prefix: &s
 }
 
 #[tauri::command]
-async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared_folder: &str) -> Result<(), String> {
+async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared_folder: &str, memory: &str, cpus: &str, disk: &str) -> Result<(), String> {
     let _ = app.emit("provision-log", format!("Starting setup for {}", instance_name));
 
     // 1. Copy default configurations into the shared folder before mounting
@@ -248,22 +274,25 @@ async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared_fol
     // For simplicity, we execute a shell command to copy the default config.
     // Replace with standard robust copy logic using std::fs if this needs to be production ready.
     let _ = app.emit("provision-log", "Copying default configurations...".to_string());
-    let _ = Command::new("cp")
-        .args(["-r", "setup-instance/default-config/clawset/.", shared_folder])
-        .output();
+    let mut cp_cmd = Command::new("cp");
+    cp_cmd.args(["-rv", "setup-instance/default-config/clawset/.", shared_folder]);
+    let _ = run_and_stream(&app, cp_cmd, "Failed to copy config");
 
-    // 2. Launch an Ubuntu LTS instance with the designated name, 2G RAM and 10G Disk
+    // 2. Launch an Ubuntu LTS instance with the designated parameters
     let _ = app.emit("provision-log", "Launching Ubuntu LTS instance (this may take a while)...".to_string());
     let mut launch = Command::new("multipass");
     launch.args([
         "launch",
+        "-v",
         "lts",
         "--name",
         instance_name,
+        "--cpus",
+        cpus,
         "--memory",
-        "2G",
+        memory,
         "--disk",
-        "10G",
+        disk,
     ]);
     run_and_stream(&app, launch, "Failed to launch instance")?;
 
@@ -297,30 +326,35 @@ async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared_fol
     ]);
     run_and_stream(&app, transfer2, "Failed to transfer provision-openclaw-gateway.sh")?;
 
-    // 5. Execute provisioning scripts inside the VM
-    let _ = app.emit("provision-log", "Running node provisioning script...".to_string());
+    // 5. Execute provisioning scripts inside the VM asynchronously
+    let _ = app.emit("provision-log", "Starting background provisioning of Node and OpenClaw within the VM...".to_string());
+    
+    // We run the scripts via nohup in the background so multipass exec returns immediately.
+    // We touch /tmp/provisioning as a lock file, run both scripts, and rm it when done.
+    // All output is redirected to /tmp/provision.log
+    let async_script = r#"
+        nohup bash -c '
+            touch /tmp/provisioning
+            echo "==> Starting Provisioning" > /tmp/provision.log
+            bash node-provision.sh >> /tmp/provision.log 2>&1
+            bash provision-openclaw-gateway.sh >> /tmp/provision.log 2>&1
+            echo "==> Provisioning Complete" >> /tmp/provision.log
+            rm -f /tmp/provisioning
+        ' >/dev/null 2>&1 &
+    "#;
+
     let mut provision = Command::new("multipass");
     provision.args([
         "exec",
         instance_name,
         "--",
         "bash",
-        "node-provision.sh",
+        "-c",
+        async_script,
     ]);
-    run_and_stream(&app, provision, "Failed to run node provisioning")?;
+    run_and_stream(&app, provision, "Failed to start background provisioning")?;
 
-    let _ = app.emit("provision-log", "Running OpenClaw setup script...".to_string());
-    let mut setup = Command::new("multipass");
-    setup.args([
-        "exec",
-        instance_name,
-        "--",
-        "bash",
-        "provision-openclaw-gateway.sh",
-    ]);
-    run_and_stream(&app, setup, "Failed to run openclaw setup")?;
-
-    let _ = app.emit("provision-log", "Installation complete!".to_string());
+    let _ = app.emit("provision-log", "Installation kicked off! You can monitor progress in the environment view.".to_string());
     Ok(())
 }
 
@@ -341,9 +375,9 @@ async fn setup_existing_instance(app: tauri::AppHandle, instance_name: &str, sha
     
     // 1. Copy default configurations into the shared folder before mounting
     let _ = app.emit("provision-log", "Copying default configurations...".to_string());
-    let _ = Command::new("cp")
-        .args(["-r", "setup-instance/default-config/clawset/.", shared_folder])
-        .output();
+    let mut cp_cmd = Command::new("cp");
+    cp_cmd.args(["-rv", "setup-instance/default-config/clawset/.", shared_folder]);
+    let _ = run_and_stream(&app, cp_cmd, "Failed to copy config");
 
     // 2. Mount the shared folder if it's not already mounted (or at least try)
     // We ignore errors here because it might already be mounted
@@ -377,31 +411,69 @@ async fn setup_existing_instance(app: tauri::AppHandle, instance_name: &str, sha
     ]);
     run_and_stream(&app, transfer2, "Failed to transfer provision-openclaw-gateway.sh")?;
 
-    // 4. Execute provisioning scripts inside the VM
-    let _ = app.emit("provision-log", "Running node provisioning script...".to_string());
+    // 4. Execute provisioning scripts inside the VM asynchronously
+    let _ = app.emit("provision-log", "Starting background provisioning of Node and OpenClaw within the VM...".to_string());
+    
+    let async_script = r#"
+        nohup bash -c '
+            touch /tmp/provisioning
+            echo "==> Starting Provisioning" > /tmp/provision.log
+            bash node-provision.sh >> /tmp/provision.log 2>&1
+            bash provision-openclaw-gateway.sh >> /tmp/provision.log 2>&1
+            echo "==> Provisioning Complete" >> /tmp/provision.log
+            rm -f /tmp/provisioning
+        ' >/dev/null 2>&1 &
+    "#;
+
     let mut provision = Command::new("multipass");
     provision.args([
         "exec",
         instance_name,
         "--",
         "bash",
-        "node-provision.sh",
+        "-c",
+        async_script,
     ]);
-    run_and_stream(&app, provision, "Failed to run node provisioning")?;
+    run_and_stream(&app, provision, "Failed to start background provisioning")?;
 
-    let _ = app.emit("provision-log", "Running OpenClaw setup script...".to_string());
-    let mut setup = Command::new("multipass");
-    setup.args([
-        "exec",
-        instance_name,
-        "--",
-        "bash",
-        "provision-openclaw-gateway.sh",
-    ]);
-    run_and_stream(&app, setup, "Failed to run openclaw setup")?;
-
-    let _ = app.emit("provision-log", "Installation complete!".to_string());
+    let _ = app.emit("provision-log", "Installation kicked off! You can monitor progress in the environment view.".to_string());
     Ok(())
+}
+
+// sysinfo imports
+use sysinfo::{System, Disks};
+
+#[derive(serde::Serialize)]
+struct HostResources {
+    free_memory: u64,
+    total_memory: u64,
+    total_cpus: usize,
+    available_disk: u64,
+    total_disk: u64,
+}
+
+#[tauri::command]
+fn get_host_resources() -> HostResources {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    
+    // Convert to GB for frontend convenience
+    let free_memory = sys.free_memory();
+    let total_memory = sys.total_memory();
+    let total_cpus = sys.cpus().len();
+    
+    // For disk space, wait for disks info
+    let disks = Disks::new_with_refreshed_list();
+    let available_disk = disks.list().iter().map(|d| d.available_space()).sum();
+    let total_disk = disks.list().iter().map(|d| d.total_space()).sum();
+
+    HostResources {
+        free_memory,
+        total_memory,
+        total_cpus,
+        available_disk,
+        total_disk,
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -410,14 +482,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             check_multipass,
             list_multipass_instances,
             get_multipass_instance_details,
             start_openclaw,
             install_openclaw,
             setup_existing_instance,
-            set_webview_url
+            set_webview_url,
+            get_host_resources,
+            read_provision_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

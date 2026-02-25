@@ -20,6 +20,15 @@ export interface MultipassInstance {
   openclawInstalled?: boolean;
   openclawRunning?: boolean;
   openclawToken?: string;
+  isProvisioning?: boolean;
+}
+
+export interface HostResources {
+  free_memory: number;
+  total_memory: number;
+  total_cpus: number;
+  available_disk: number;
+  total_disk: number;
 }
 
 interface MultipassContextType {
@@ -27,13 +36,14 @@ interface MultipassContextType {
   instances: MultipassInstance[];
   selectedInstanceName: string | null;
   selectedInstance: MultipassInstance | null;
+  hostResources: HostResources | null;
   loading: boolean;
   error: string | null;
   setSelectedInstanceName: (name: string) => void;
   refreshInstances: () => Promise<void>;
-  isProvisioning: boolean;
+  provisioningInstanceName: string | null;
   provisionLogs: string[];
-  installInstance: (name: string, hostPath: string) => Promise<void>;
+  installInstance: (name: string, hostPath: string, memory: string, cpus: string, disk: string) => Promise<void>;
   setupExistingInstance: (name: string, hostPath: string) => Promise<void>;
   startInstance: (name: string) => Promise<void>;
 }
@@ -44,16 +54,27 @@ const PREFERRED_INSTANCE_KEY = "clawset_preferred_instance";
 
 export function MultipassProvider({ children }: { children: ReactNode }) {
   const [isMultipassInstalled, setIsMultipassInstalled] = useState(true);
-  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [provisioningInstanceName, setProvisioningInstanceName] = useState<string | null>(null);
   const [instances, setInstances] = useState<MultipassInstance[]>([]);
   const [selectedInstanceName, setSelectedInstanceName] = useState<string | null>(null);
+  const [hostResources, setHostResources] = useState<HostResources | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [provisionLogs, setProvisionLogs] = useState<string[]>([]);
 
-  const selectedInstance = instances.find(inst => inst.name === selectedInstanceName) || null;
+  const selectedInstance = instances.find(inst => inst.name === selectedInstanceName) || null;
 
   useEffect(() => {
+    const fetchResources = async () => {
+      try {
+        const res: HostResources = await invoke("get_host_resources");
+        setHostResources(res);
+      } catch (e) {
+        console.error("Failed to fetch host resources:", e);
+      }
+    };
+    fetchResources();
+
     const unlisten = listen<string>("provision-log", (event) => {
       setProvisionLogs(prev => [...prev, event.payload]);
     });
@@ -67,6 +88,8 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     try {
       const details: any = await invoke("get_multipass_instance_details", { instanceName: name });
       
+      let newProvisioningState = details.is_provisioning || false;
+
       setInstances(prev => prev.map(inst => {
         if (inst.name === name) {
           return {
@@ -79,10 +102,24 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
             openclawInstalled: details.openclaw_installed || false,
             openclawRunning: details.openclaw_running || false,
             openclawToken: details.openclaw_token || undefined,
+            isProvisioning: newProvisioningState,
           };
         }
         return inst;
       }));
+
+      // if the instance is provisioning, fetch the logs immediately
+      if (newProvisioningState) {
+          try {
+              const logContents: string = await invoke("read_provision_log", { instanceName: name });
+              if (logContents) {
+                  setProvisionLogs(logContents.split('\n'));
+              }
+          } catch(e) {
+              console.error(`Error fetching provision logs for ${name}:`, e);
+          }
+      }
+
     } catch (e: any) {
       console.error(`Error fetching details for ${name}:`, e);
     }
@@ -138,7 +175,9 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Poll list and selected instance details every 10 seconds
+  const isAnyProvisioning = provisioningInstanceName !== null || instances.some(inst => inst.isProvisioning);
+
+  // Poll list and selected instance details
   useEffect(() => {
     const refresh = async () => {
       await refreshInstances();
@@ -148,10 +187,11 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     }
 
     refresh();
-    const interval = setInterval(refresh, 10000); 
+    const intervalTime = isAnyProvisioning ? 2000 : 10000;
+    const interval = setInterval(refresh, intervalTime); 
     
     return () => clearInterval(interval);
-  }, [selectedInstanceName]);
+  }, [selectedInstanceName, isAnyProvisioning]);
 
   const handleSetSelectedInstance = (name: string) => {
     setSelectedInstanceName(name);
@@ -159,11 +199,12 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     fetchInstanceDetails(name);
   };
 
-  const installInstance = async (name: string, hostPath: string) => {
+  const installInstance = async (name: string, hostPath: string, memory: string, cpus: string, disk: string) => {
+    setProvisioningInstanceName(name);
     setLoading(true);
     setProvisionLogs([]); // Clear previous logs
     try {
-      await invoke("install_openclaw", { instanceName: name, sharedFolder: hostPath });
+      await invoke("install_openclaw", { instanceName: name, sharedFolder: hostPath, memory, cpus, disk });
       await refreshInstances();
       handleSetSelectedInstance(name);
     } catch (error: any) {
@@ -171,11 +212,12 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
       throw error;
     } finally {
       setLoading(false);
+      setProvisioningInstanceName(null);
     }
   };
 
   const setupExistingInstance = async (name: string, hostPath: string) => {
-    setIsProvisioning(true);
+    setProvisioningInstanceName(name);
     setLoading(true);
     setProvisionLogs([]); // Clear previous logs
     try {
@@ -187,14 +229,9 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
       throw error;
     } finally {
       setLoading(false);
+      setProvisioningInstanceName(null);
     }
   };
-
-  useEffect(() => {
-    if (isProvisioning && selectedInstance) {
-      
-    }
-  }, [isProvisioning]);
 
   const startInstance = async (name: string) => {
     setLoading(true);
@@ -211,13 +248,14 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     instances,
     selectedInstance,
     selectedInstanceName,
+    hostResources,
     loading,
     error,
     setSelectedInstanceName: handleSetSelectedInstance,
     refreshInstances,
     provisionLogs,
     installInstance,
-    isProvisioning,
+    provisioningInstanceName,
     setupExistingInstance,
     startInstance
   };
