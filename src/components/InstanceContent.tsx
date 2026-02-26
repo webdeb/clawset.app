@@ -125,7 +125,7 @@ export function InstanceContent() {
               <div className="flex justify-between items-center py-1">
                 <span className="text-default-600 text-sm">OpenClaw Installed</span>
                 <div className="flex items-center gap-2">
-                  {!selectedInstance.openclawInstalled && (
+                  {/* {!selectedInstance.openclawInstalled && (
                     <Button 
                       size="sm" 
                       variant="ghost" 
@@ -135,7 +135,7 @@ export function InstanceContent() {
                     >
                       Install Node & OpenClaw
                     </Button>
-                  )}
+                  )} */}
                   <Chip size="sm" color={selectedInstance.openclawInstalled ? "success" : "default"} variant="soft">
                     {selectedInstance.openclawInstalled ? "Yes" : "No"}
                   </Chip>
