@@ -5,7 +5,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: boolean }) {
   const { selectedInstance, syncOpenclawStatus } = useMultipass();
-  const [loadingAction, setLoadingAction] = useState<"start" | "stop" | "init" | null>(null);
+  const [loadingAction, setLoadingAction] = useState<"start" | "stop" | "init" | "save" | null>(null);
+  const [isEditingConfig, setIsEditingConfig] = useState(false);
+  const [editedConfig, setEditedConfig] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   if (!selectedInstance || !selectedInstance.openclawInstalled) {
     return null;
@@ -73,6 +76,31 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
   };
 
   const isConfigMissing = !config || Object.keys(config).length === 0;
+
+  const handleEditConfig = () => {
+    setEditedConfig(JSON.stringify(config, null, 2));
+    setIsEditingConfig(true);
+    setSaveError("");
+  };
+
+  const handleSaveConfig = async () => {
+    setLoadingAction("save");
+    setSaveError("");
+    try {
+      JSON.parse(editedConfig); // Validate JSON format
+      await invoke("write_openclaw_config", {
+        instanceName: selectedInstance.name,
+        configJson: editedConfig
+      });
+      setIsEditingConfig(false);
+    } catch (e: any) {
+      console.error(e);
+      setSaveError(e.message || "Invalid JSON or failed to save");
+    } finally {
+      await syncOpenclawStatus(selectedInstance.name);
+      setLoadingAction(null);
+    }
+  };
 
   return (
     <Card className="p-4 bg-default-50 border border-default-200 mt-4 flex flex-col gap-4 shadow-sm">
@@ -192,10 +220,37 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
                   Generate Initial Config
                 </Button>
               </div>
+            ) : isEditingConfig ? (
+              <div className="flex flex-col gap-3">
+                <textarea
+                  value={editedConfig}
+                  onChange={(e) => setEditedConfig(e.target.value)}
+                  rows={14}
+                  className={`w-full font-mono text-[10px] p-2 rounded-lg bg-default-100 border ${saveError ? 'border-danger' : 'border-default-200'} focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary resize-y`}
+                />
+                {saveError && <span className="text-danger text-xs">{saveError}</span>}
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" onPress={() => setIsEditingConfig(false)}>Cancel</Button>
+                  <Button size="sm" className="bg-primary text-white" onPress={handleSaveConfig} isDisabled={loadingAction !== null}>
+                    {loadingAction === "save" && <Spinner size="sm" color="current" />}
+                    Save
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <pre className="p-3 bg-default-100 rounded-lg text-[10px] overflow-x-auto max-h-64 border border-default-200">
-                {JSON.stringify(config, null, 2)}
-              </pre>
+              <div className="relative group/config">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="absolute top-2 right-4 opacity-0 group-hover/config:opacity-100 transition-opacity z-10 bg-background/50 backdrop-blur" 
+                  onPress={handleEditConfig}
+                >
+                  Edit JSON
+                </Button>
+                <pre className="p-3 bg-default-100 rounded-lg text-[10px] overflow-x-auto max-h-64 border border-default-200">
+                  {JSON.stringify(config, null, 2)}
+                </pre>
+              </div>
             )}
           </div>
       </details>
