@@ -62,7 +62,7 @@ export function InstanceProvision() {
     
     setActionLoading(true);
     try {
-      await installInstance(name, folder, `${safeMemory}G`, `${safeCpus}`, `${safeDisk}G`);
+      await installInstance(name, `${safeMemory}G`, `${safeCpus}`, `${safeDisk}G`);
     } catch (e) {
       console.error(e);
     } finally {

@@ -6,7 +6,7 @@ import { useMultipass } from "../context/MultipassContext";
 import { InstanceProvision } from "./InstanceProvision";
 
 export function InstanceContent() {
-  const { selectedInstance, setupExistingInstance, provisionLogs, provisioningInstanceName } = useMultipass();
+  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName } = useMultipass();
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const isThisInstanceProvisioning = 
@@ -19,7 +19,7 @@ export function InstanceContent() {
     }
   }, [provisionLogs]);
 
-  const handleSetupExistingInstance = async () => {
+  const handleProvisionInstance = async () => {
     if (!selectedInstance) return;
 
     try {
@@ -45,7 +45,7 @@ export function InstanceContent() {
 
       if (!finalHostPath) return;
 
-      await setupExistingInstance(selectedInstance.name, finalHostPath);
+      await provisionInstance(selectedInstance.name, finalHostPath);
     } catch (e) {
       console.error(e);
     }
@@ -125,17 +125,17 @@ export function InstanceContent() {
               <div className="flex justify-between items-center py-1">
                 <span className="text-default-600 text-sm">OpenClaw Installed</span>
                 <div className="flex items-center gap-2">
-                  {/* {!selectedInstance.openclawInstalled && (
+                  {!selectedInstance.openclawInstalled && (
                     <Button 
                       size="sm" 
                       variant="ghost" 
                       className="bg-secondary/10 text-secondary" 
-                      onPress={handleSetupExistingInstance}
+                      onPress={handleProvisionInstance}
                       isDisabled={provisioningInstanceName !== null || selectedInstance.isProvisioning} // disable if ANY instance is provisioning or this one is
                     >
                       Install Node & OpenClaw
                     </Button>
-                  )} */}
+                  )}
                   <Chip size="sm" color={selectedInstance.openclawInstalled ? "success" : "default"} variant="soft">
                     {selectedInstance.openclawInstalled ? "Yes" : "No"}
                   </Chip>

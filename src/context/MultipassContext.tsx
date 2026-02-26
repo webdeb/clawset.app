@@ -43,8 +43,8 @@ interface MultipassContextType {
   refreshInstances: () => Promise<void>;
   provisioningInstanceName: string | null;
   provisionLogs: string[];
-  installInstance: (name: string, hostPath: string, memory: string, cpus: string, disk: string) => Promise<void>;
-  setupExistingInstance: (name: string, hostPath: string) => Promise<void>;
+  installInstance: (name: string, memory: string, cpus: string, disk: string) => Promise<void>;
+  provisionInstance: (name: string, hostPath: string) => Promise<void>;
   startInstance: (name: string) => Promise<void>;
 }
 
@@ -86,6 +86,27 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
 
   const fetchInstanceDetails = async (name: string) => {
     try {
+      const currentInst = instances.find(inst => inst.name === name);
+      const isCurrentlyProvisioning = provisioningInstanceName === name || currentInst?.isProvisioning;
+
+      // If the instance is currently provisioning, avoid hitting it with heavy commands
+      if (isCurrentlyProvisioning) {
+        try {
+          const logContents: string = await invoke("read_provision_log", { instanceName: name });
+          if (logContents) {
+            setProvisionLogs(logContents.split('\n'));
+            if (logContents.includes("==> Provisioning Complete")) {
+              setInstances(prev => prev.map(inst => 
+                inst.name === name ? { ...inst, isProvisioning: false } : inst
+              ));
+            }
+          }
+        } catch(e) {
+          console.error(`Error fetching provision logs for ${name}:`, e);
+        }
+        return;
+      }
+
       const details: any = await invoke("get_multipass_instance_details", { instanceName: name });
       
       let newProvisioningState = details.is_provisioning || false;
@@ -108,7 +129,7 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
         return inst;
       }));
 
-      // if the instance is provisioning, fetch the logs immediately
+      // if the instance just started provisioning, fetch the logs immediately
       if (newProvisioningState) {
           try {
               const logContents: string = await invoke("read_provision_log", { instanceName: name });
@@ -179,18 +200,32 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
 
   // Poll list and selected instance details
   useEffect(() => {
-    const refresh = async () => {
-      await refreshInstances();
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let isMounted = true;
+
+    const runPoll = async () => {
+      if (!isMounted) return;
+
+      // Avoid hammering the multipass daemon with `check_multipass` and `list` while provisioning
+      if (!isAnyProvisioning) {
+        await refreshInstances();
+      }
       if (selectedInstanceName) {
         await fetchInstanceDetails(selectedInstanceName);
       }
-    }
 
-    refresh();
-    const intervalTime = isAnyProvisioning ? 2000 : 10000;
-    const interval = setInterval(refresh, intervalTime); 
+      if (isMounted) {
+        const intervalTime = isAnyProvisioning ? 2000 : 10000;
+        timeoutId = setTimeout(runPoll, intervalTime);
+      }
+    };
+
+    runPoll();
     
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [selectedInstanceName, isAnyProvisioning]);
 
   const handleSetSelectedInstance = (name: string) => {
@@ -199,12 +234,12 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     fetchInstanceDetails(name);
   };
 
-  const installInstance = async (name: string, hostPath: string, memory: string, cpus: string, disk: string) => {
+  const installInstance = async (name: string, memory: string, cpus: string, disk: string) => {
     setProvisioningInstanceName(name);
     setLoading(true);
     setProvisionLogs([]); // Clear previous logs
     try {
-      await invoke("install_openclaw", { instanceName: name, sharedFolder: hostPath, memory, cpus, disk });
+      await invoke("install_openclaw", { instanceName: name, memory, cpus, disk });
       await refreshInstances();
       handleSetSelectedInstance(name);
     } catch (error: any) {
@@ -216,12 +251,12 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const setupExistingInstance = async (name: string, hostPath: string) => {
+  const provisionInstance = async (name: string, hostPath: string) => {
     setProvisioningInstanceName(name);
     setLoading(true);
     setProvisionLogs([]); // Clear previous logs
     try {
-      await invoke("setup_existing_instance", { instanceName: name, sharedFolder: hostPath });
+      await invoke("provision_instance", { instanceName: name, sharedFolder: hostPath });
       await refreshInstances();
       handleSetSelectedInstance(name);
     } catch (error: any) {
@@ -256,7 +291,7 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     provisionLogs,
     installInstance,
     provisioningInstanceName,
-    setupExistingInstance,
+    provisionInstance,
     startInstance
   };
 

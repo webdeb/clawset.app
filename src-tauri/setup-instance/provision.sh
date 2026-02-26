@@ -18,8 +18,9 @@ echo "Detected ARCH=${ARCH}"
 # -------------------------
 # Build prerequisites (node-gyp + common native modules)
 # -------------------------
-sudo apt-get update -y
-sudo apt-get install -y \
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update -yq
+sudo apt-get install -yq \
   ca-certificates \
   curl \
   git \
@@ -58,6 +59,27 @@ nvm alias default "${NODE_VERSION}"
 
 echo "Node: $(node -v)"
 echo "npm : $(npm -v)"
+
+# -------------------------
+# Configure OpenClaw environment directories
+# -------------------------
+echo "Configuring OpenClaw Workspace Directories..."
+
+WORKSPACE_DIR="/home/ubuntu/clawset"
+CONFIG_DIR="$WORKSPACE_DIR/.openclaw"
+
+# Set for current script
+export OPENCLAW_WORKSPACE_DIR="$WORKSPACE_DIR"
+export OPENCLAW_CONFIG_DIR="$CONFIG_DIR"
+
+# Persist for ubuntu user profile
+echo "export OPENCLAW_WORKSPACE_DIR=\"$WORKSPACE_DIR\"" >> ~/.bashrc
+echo "export OPENCLAW_CONFIG_DIR=\"$CONFIG_DIR\"" >> ~/.bashrc
+
+# Ensure the config dir exists if clawset is already mounted
+if [ -d "$WORKSPACE_DIR" ]; then
+  mkdir -p "$CONFIG_DIR"
+fi
 
 # -------------------------
 # Install openclaw (arm64 fix)

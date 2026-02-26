@@ -62,7 +62,7 @@ pub fn run() {
             instance_control::get_multipass_instance_details,
             instance_control::start_openclaw,
             instance_provision::install_openclaw,
-            instance_provision::setup_existing_instance,
+            instance_provision::provision_instance,
             set_webview_url,
             get_host_resources,
             instance_control::read_provision_log

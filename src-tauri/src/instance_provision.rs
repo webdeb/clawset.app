@@ -42,19 +42,10 @@ pub fn run_and_stream(app: &tauri::AppHandle, mut command: Command, error_prefix
 }
 
 #[tauri::command]
-pub async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared_folder: &str, memory: &str, cpus: &str, disk: &str) -> Result<(), String> {
+pub async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, memory: &str, cpus: &str, disk: &str) -> Result<(), String> {
     let _ = app.emit("provision-log", format!("Starting setup for {}", instance_name));
 
-    // 1. Copy default configurations into the shared folder before mounting
-    // We assume the user runs the app from its root directory in dev, or it's bundled.
-    // For simplicity, we execute a shell command to copy the default config.
-    // Replace with standard robust copy logic using std::fs if this needs to be production ready.
-    let _ = app.emit("provision-log", "Copying default configurations...".to_string());
-    let mut cp_cmd = Command::new("cp");
-    cp_cmd.args(["-rv", "setup-instance/default-config/clawset/.", shared_folder]);
-    let _ = run_and_stream(&app, cp_cmd, "Failed to copy config");
-
-    // 2. Launch an Ubuntu LTS instance with the designated parameters
+    // Launch an Ubuntu LTS instance with the designated parameters
     let _ = app.emit("provision-log", "Launching Ubuntu LTS instance (this may take a while)...".to_string());
     let mut launch = Command::new("multipass");
     launch.args([
@@ -72,62 +63,12 @@ pub async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, shared
     ]);
     run_and_stream(&app, launch, "Failed to launch instance")?;
 
-    // 3. Mount the shared folder into the VM at /home/ubuntu/clawset
-    let _ = app.emit("provision-log", format!("Mounting shared folder to {}:/home/ubuntu/clawset...", instance_name));
-    let mut mount = Command::new("multipass");
-    mount.args([
-        "mount",
-        shared_folder,
-        &format!("{}:/home/ubuntu/clawset", instance_name),
-    ]);
-    if let Err(e) = run_and_stream(&app, mount, "Failed to mount shared folder") {
-         let _ = app.emit("provision-log", format!("Mount warning: {}", e));
-    }
-
-    // 4. Transfer provisioning scripts to the VM
-    let _ = app.emit("provision-log", "Transferring provisioning scripts...".to_string());
-
-    let mut transfer = Command::new("multipass");
-    transfer.args([
-        "transfer",
-        "setup-instance/provision.sh",
-        &format!("{}:provision.sh", instance_name),
-    ]);
-    run_and_stream(&app, transfer, "Failed to transfer provision.sh")?;
-
-    // 5. Execute provisioning scripts inside the VM asynchronously
-    let _ = app.emit("provision-log", "Starting background provisioning of Node and OpenClaw within the VM...".to_string());
-    
-    // We run the scripts via nohup in the background so multipass exec returns immediately.
-    // We touch /tmp/provisioning as a lock file, run both scripts, and rm it when done.
-    // All output is redirected to /tmp/provision.log
-    let async_script = r#"
-        nohup bash -c '
-            touch /tmp/provisioning
-            echo "==> Starting Provisioning" > /tmp/provision.log
-            bash provision.sh >> /tmp/provision.log 2>&1
-            echo "==> Provisioning Complete" >> /tmp/provision.log
-            rm -f /tmp/provisioning
-        ' >/dev/null 2>&1 &
-    "#;
-
-    let mut provision = Command::new("multipass");
-    provision.args([
-        "exec",
-        instance_name,
-        "--",
-        "bash",
-        "-c",
-        async_script,
-    ]);
-    run_and_stream(&app, provision, "Failed to start background provisioning")?;
-
-    let _ = app.emit("provision-log", "Installation kicked off! You can monitor progress in the environment view.".to_string());
+    let _ = app.emit("provision-log", "Instance created successfully! You can now configure and provision it.".to_string());
     Ok(())
 }
 
 #[tauri::command]
-pub async fn setup_existing_instance(app: tauri::AppHandle, instance_name: &str, shared_folder: &str) -> Result<(), String> {
+pub async fn provision_instance(app: tauri::AppHandle, instance_name: &str, shared_folder: &str) -> Result<(), String> {
     let _ = app.emit("provision-log", format!("Starting existing instance setup for {}", instance_name));
     
     // 1. Copy default configurations into the shared folder before mounting
@@ -150,36 +91,28 @@ pub async fn setup_existing_instance(app: tauri::AppHandle, instance_name: &str,
          let _ = app.emit("provision-log", format!("Mount warning: {}", e));
     }
 
-    // 3. Transfer provisioning scripts to the VM
-    let _ = app.emit("provision-log", "Transferring provisioning scripts...".to_string());
-    let mut transfer1 = Command::new("multipass");
-    transfer1.args([
+    // 3. Transfer provisioning script to the VM
+    let _ = app.emit("provision-log", "Transferring provisioning script...".to_string());
+    
+    let mut transfer = Command::new("multipass");
+    transfer.args([
         "transfer",
-        "setup-instance/node-provision.sh",
-        &format!("{}:node-provision.sh", instance_name),
+        "setup-instance/provision.sh",
+        &format!("{}:provision.sh", instance_name),
     ]);
-    run_and_stream(&app, transfer1, "Failed to transfer node-provision.sh")?;
+    run_and_stream(&app, transfer, "Failed to transfer provision.sh")?;
 
-    let mut transfer2 = Command::new("multipass");
-    transfer2.args([
-        "transfer",
-        "setup-instance/provision-openclaw-gateway.sh",
-        &format!("{}:provision-openclaw-gateway.sh", instance_name),
-    ]);
-    run_and_stream(&app, transfer2, "Failed to transfer provision-openclaw-gateway.sh")?;
-
-    // 4. Execute provisioning scripts inside the VM asynchronously
+    // 4. Execute provisioning script inside the VM asynchronously
     let _ = app.emit("provision-log", "Starting background provisioning of Node and OpenClaw within the VM...".to_string());
     
     let async_script = r#"
         nohup bash -c '
             touch /tmp/provisioning
             echo "==> Starting Provisioning" > /tmp/provision.log
-            bash node-provision.sh >> /tmp/provision.log 2>&1
-            bash provision-openclaw-gateway.sh >> /tmp/provision.log 2>&1
+            bash provision.sh >> /tmp/provision.log 2>&1
             echo "==> Provisioning Complete" >> /tmp/provision.log
             rm -f /tmp/provisioning
-        ' >/dev/null 2>&1 &
+        ' </dev/null >/dev/null 2>&1 &
     "#;
 
     let mut provision = Command::new("multipass");
