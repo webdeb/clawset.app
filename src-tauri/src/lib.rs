@@ -67,6 +67,8 @@ pub fn run() {
             instance_control::stop_openclaw_daemon,
             instance_control::read_agent_auth,
             instance_control::write_agent_auth,
+            instance_control::check_apphub_status,
+            instance_control::start_apphub,
             instance_provision::install_openclaw,
             instance_provision::provision_instance,
             set_webview_url,

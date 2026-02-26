@@ -308,3 +308,33 @@ pub async fn write_agent_auth(instance_name: &str, auth_json: &str) -> Result<()
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
+
+#[tauri::command]
+pub async fn check_apphub_status(instance_name: &str) -> Result<bool, String> {
+    // curl the port to see if a web server is responding
+    let script = "curl -s http://127.0.0.1:3000 > /dev/null";
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-c", script])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    // If curl exits successfully, the server is running and accepting connections
+    Ok(output.status.success())
+}
+
+#[tauri::command]
+pub async fn start_apphub(instance_name: &str) -> Result<(), String> {
+    // We launch npm run dev in the background under ~/clawset/apphub
+    let script = "source ~/.bashrc && cd ~/clawset/apphub && nohup npm run dev > apphub.log 2>&1 &";
+    
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-ic", script])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}

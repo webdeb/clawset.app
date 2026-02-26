@@ -61,6 +61,7 @@ export function AppLayout() {
               <Tabs.ListContainer>
                 <Tabs.List className="gap-6 shadow-none p-0 border-b-0 bg-transparent h-8">
                   <Tabs.Tab href="#dashboard" id="dashboard" isDisabled={openclawStatus !== "Running"}>Dashboard</Tabs.Tab>
+                  <Tabs.Tab href="#apphub" id="apphub" isDisabled={openclawStatus !== "Running"}>AppHub</Tabs.Tab>
                   <Tabs.Tab href="#instance" id="instance">Instance</Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>

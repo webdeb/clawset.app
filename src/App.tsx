@@ -3,6 +3,7 @@ import { InstanceContent } from "./components/InstanceContent";
 import { ConfigContent } from "./components/ConfigContent";
 import { AppLayout } from "./components/AppLayout";
 import { DashboardContentRouteWrapper } from "./components/DashboardContent";
+import { AppHubContentRouteWrapper } from "./components/AppHubContent";
 import { MultipassProvider } from "./context/MultipassContext";
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
           <Route path="/instance" element={<InstanceContent />} />
           <Route path="/config" element={<ConfigContent />} />
           <Route path="/dashboard" element={<DashboardContentRouteWrapper />} />
+          <Route path="/apphub" element={<AppHubContentRouteWrapper />} />
         </Route>
       </Routes>
     </MultipassProvider>
