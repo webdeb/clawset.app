@@ -83,7 +83,8 @@ export function DashboardContentRouteWrapper() {
     );
   }
 
-  const url = `http://${selectedInstance.ip}:18789${selectedInstance.openclawToken ? `/#token=${selectedInstance.openclawToken}` : ''}`;
+  const token = selectedInstance.openclawConfig?.gateway?.auth?.token;
+  const url = `http://${selectedInstance.ip}:18789${token ? `/#token=${token}` : ''}`;
 
   return <DashboardContent url={url} navbarHeight={90} />;
 }

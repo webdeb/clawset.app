@@ -54,7 +54,8 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
             token: generatedToken
           },
           controlUi: {
-            dangerouslyDisableDeviceAuth: true
+            dangerouslyDisableDeviceAuth: true,
+            dangerouslyAllowHostHeaderOriginFallback: true
           }
         }
       };

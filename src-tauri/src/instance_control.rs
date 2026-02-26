@@ -249,7 +249,7 @@ pub async fn write_openclaw_config(instance_name: &str, config_json: &str) -> Re
 
 #[tauri::command]
 pub async fn start_openclaw_daemon(instance_name: &str) -> Result<(), String> {
-    let script = "source ~/.bashrc && openclaw start"; // or openclaw daemon start depending on CLI
+    let script = "source ~/.bashrc && openclaw gateway start"; // or openclaw daemon start depending on CLI
     let output = Command::new("multipass")
         .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
@@ -264,7 +264,7 @@ pub async fn start_openclaw_daemon(instance_name: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn stop_openclaw_daemon(instance_name: &str) -> Result<(), String> {
-    let script = "source ~/.bashrc && openclaw stop"; // or openclaw daemon stop
+    let script = "source ~/.bashrc && openclaw gateway stop"; // or openclaw daemon stop
     let output = Command::new("multipass")
         .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
