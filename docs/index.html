@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>clawset 🐾 | Secure OpenClaw Orchestration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: #121214;
+            --primary: #3b82f6;
+            --primary-glow: rgba(59, 130, 246, 0.5);
+            --text: #fafafa;
+            --text-muted: #a1a1aa;
+            --border: #27272a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        section {
+            padding: 6rem 0;
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+            filter: blur(100px);
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        .logo-container {
+            margin-bottom: 2rem;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        .logo {
+            width: 280px;
+            height: 280px;
+            filter: drop-shadow(0 0 40px var(--primary-glow));
+        }
+
+        h1 {
+            font-size: 4.5rem;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            margin-bottom: 1rem;
+            background: linear-gradient(to bottom, #fff 40%, #a1a1aa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .quote {
+            font-size: 1.5rem;
+            font-weight: 300;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-bottom: 3rem;
+            max-width: 600px;
+        }
+
+        .cta-btns {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.8rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px var(--primary-glow);
+        }
+
+        .btn-secondary {
+            background-color: var(--surface);
+            color: white;
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background-color: #1a1a1d;
+            border-color: #3f3f46;
+        }
+
+        /* Features */
+        h2 {
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 2.5rem;
+            border-radius: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Roadmap */
+        .roadmap-list {
+            list-style: none;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .roadmap-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            border-left: 2px solid var(--border);
+            position: relative;
+        }
+
+        .roadmap-item::before {
+            content: '';
+            position: absolute;
+            left: -7px;
+            top: 1.8rem;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--surface);
+            border: 2px solid var(--primary);
+        }
+
+        /* Tech Stack */
+        .tech-list {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 3rem;
+            opacity: 0.8;
+        }
+
+        .tech-item {
+            text-align: center;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            background: #1a1a1d;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        footer {
+            padding: 4rem 0;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 3rem;
+            }
+
+            .logo {
+                width: 80px;
+                height: 80px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <section class="hero container">
+        <div class="logo-container">
+            <img src="clawsetapp-icon.png" alt="clawset logo" class="logo">
+        </div>
+        <h1>clawset</h1>
+        <p class="quote">"Because an Agent without a world is just a chatbot."</p>
+        <div class="cta-btns">
+            <a href="https://github.com/webdeb/clawset.app" class="btn btn-primary">View on GitHub</a>
+            <a href="#features" class="btn btn-secondary">Explore Features</a>
+        </div>
+    </section>
+
+    <section id="features" class="container">
+        <h2>Premium Orchestration</h2>
+        <div class="features-grid">
+            <div class="card">
+                <h3>🚀 Multipass Control</h3>
+                <p>Launch and manage Ubuntu LTS instances with native performance directly from your desktop.</p>
+            </div>
+            <div class="card">
+                <h3>🔧 Auto-Provisioning</h3>
+                <p>One-click setup for Node.js and the complete OpenClaw stack within your isolated environments.</p>
+            </div>
+            <div class="card">
+                <h3>📺 Unified Dashboard</h3>
+                <p>Seamlessly access your remote OpenClaw Gateway UI through a sandboxed embedded webview.</p>
+            </div>
+            <div class="card">
+                <h3>🧩 AppHub Integration</h3>
+                <p>Preview and develop agents instantly. Start servers in the VM and interact with them in real-time.
+                </p>
+            </div>
+            <div class="card">
+                <h3>📊 System Insights</h3>
+                <p>Monitor CPU, RAM, and Disk usage on the host to ensure your agents have the resources they need.</p>
+            </div>
+            <div class="card">
+                <h3>🎨 Modern DX</h3>
+                <p>Built with HeroUI for a state-of-the-art interface that feels as powerful as the tools it manages.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section id="roadmap" class="container">
+        <h2>Roadmap</h2>
+        <div class="roadmap-list">
+            <div class="roadmap-item">
+                <div>
+                    <strong>🐋 Docker Support</strong>
+                    <p>Native container orchestration for even lighter agent deployments.</p>
+                </div>
+            </div>
+            <div class="roadmap-item">
+                <div>
+                    <strong>📦 Multi-Molt Support</strong>
+                    <p>Expanding to NanoBot, PicoClaw, ZeroClaw, and NullClaw ecosystems.</p>
+                </div>
+            </div>
+            <div class="roadmap-item">
+                <div>
+                    <strong>🤖 Extended AI Providers</strong>
+                    <p>First-class support for Anthropic, Gemini, and local LLMs via Ollama.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="container">
+        <h2>Pure Performance</h2>
+        <div class="tech-list">
+            <div class="tech-item"><strong>Rust 🦀</strong><br><small>Memory Safety</small></div>
+            <div class="tech-item"><strong>Tauri v2</strong><br><small>Lightweight Core</small></div>
+            <div class="tech-item"><strong>React 19</strong><br><small>Modern Frontend</small></div>
+            <div class="tech-item"><strong>Multipass</strong><br><small>VM Engine</small></div>
+        </div>
+    </section>
+
+    <footer class="container">
+        <p>&copy; 2026 @webdeb &bull; MIT License &bull; Built with 🐾 for Agents</p>
+    </footer>
+
+</body>
+
+</html>
