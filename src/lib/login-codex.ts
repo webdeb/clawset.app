@@ -8,32 +8,6 @@ const REDIRECT_URI = "http://localhost:1455/auth/callback";
 const SCOPE = "openid profile email offline_access";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
 
-/*
-This is a reference implementation of the URL generation.
-
-async function createAuthorizationFlow(
-	originator: string = "pi",
-): Promise<{ verifier: string; state: string; url: string }> {
-	const { verifier, challenge } = await generatePKCE();
-	const state = createState();
-
-	const url = new URL(AUTHORIZE_URL);
-	url.searchParams.set("response_type", "code");
-	url.searchParams.set("client_id", CLIENT_ID);
-	url.searchParams.set("redirect_uri", REDIRECT_URI);
-	url.searchParams.set("scope", SCOPE);
-	url.searchParams.set("code_challenge", challenge);
-	url.searchParams.set("code_challenge_method", "S256");
-	url.searchParams.set("state", state);
-	url.searchParams.set("id_token_add_organizations", "true");
-	url.searchParams.set("codex_cli_simplified_flow", "true");
-	url.searchParams.set("originator", originator);
-
-	return { verifier, state, url: url.toString() };
-}
-*/
-
-
 export async function createAuthorizationFlow(originator = "pi") {
     const { challenge, verifier } = await generatePKCE();
     const stateArray = new Uint8Array(16);
