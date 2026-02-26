@@ -8,339 +8,384 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;700&display=swap"
         rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        bg: '#030305',
+                        surface: 'rgba(20, 20, 25, 0.6)',
+                        primary: '#3b82f6',
+                        'primary-light': '#60a5fa',
+                        secondary: '#8b5cf6',
+                    },
+                    animation: {
+                        float: 'float 6s ease-in-out infinite',
+                        'pulse-glow': 'pulseGlow 8s ease-in-out infinite',
+                        'fade-in': 'fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+                            '50%': { transform: 'translateY(-20px) rotate(2deg)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { opacity: '0.5', transform: 'scale(1)' },
+                            '50%': { opacity: '0.8', transform: 'scale(1.05)' },
+                        },
+                        fadeInUp: {
+                            from: { opacity: '0', transform: 'translateY(30px)' },
+                            to: { opacity: '1', transform: 'translateY(0)' },
+                        },
+                    },
+                },
+            },
+        }
+    </script>
     <style>
-        :root {
-            --bg: #09090b;
-            --surface: #121214;
-            --primary: #3b82f6;
-            --primary-glow: rgba(59, 130, 246, 0.5);
-            --text: #fafafa;
-            --text-muted: #a1a1aa;
-            --border: #27272a;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        /* Effects Tailwind can't express */
         body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-            overflow-x: hidden;
+            background-color: #030305;
+            background-image:
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+            background-attachment: fixed;
         }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 0 2rem;
-        }
-
-        section {
-            padding: 6rem 0;
-        }
-
-        /* Hero Section */
-        .hero {
-            min-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            position: relative;
-        }
-
-        .hero::before {
+        body::before {
             content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
-            filter: blur(100px);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background:
+                linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 50px 50px,
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 50px 50px;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
             z-index: -1;
-            opacity: 0.3;
+            pointer-events: none;
         }
 
-        .logo-container {
-            margin-bottom: 2rem;
-            animation: float 6s ease-in-out infinite;
+        /* Hero glow orb */
+        .hero-glow {
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.5) 0%, transparent 60%);
+            filter: blur(120px);
         }
 
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0px);
-            }
-
-            50% {
-                transform: translateY(-15px);
-            }
+        /* Logo glow */
+        .logo-glow {
+            background: #3b82f6;
+            filter: blur(80px);
         }
 
-        .logo {
-            width: 280px;
-            height: 280px;
-            filter: drop-shadow(0 0 40px var(--primary-glow));
-        }
-
-        h1 {
-            font-size: 4.5rem;
-            font-weight: 800;
-            letter-spacing: -0.05em;
-            margin-bottom: 1rem;
-            background: linear-gradient(to bottom, #fff 40%, #a1a1aa);
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
+            color: transparent;
         }
 
-        .quote {
-            font-size: 1.5rem;
-            font-weight: 300;
-            color: var(--text-muted);
-            font-style: italic;
-            margin-bottom: 3rem;
-            max-width: 600px;
-        }
-
-        .cta-btns {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .btn {
-            padding: 0.8rem 2rem;
-            border-radius: 8px;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            font-size: 1rem;
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-            box-shadow: 0 0 20px var(--primary-glow);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 30px var(--primary-glow);
-        }
-
-        .btn-secondary {
-            background-color: var(--surface);
-            color: white;
-            border: 1px solid var(--border);
-        }
-
-        .btn-secondary:hover {
-            background-color: #1a1a1d;
-            border-color: #3f3f46;
-        }
-
-        /* Features */
-        h2 {
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            text-align: center;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            padding: 2.5rem;
-            border-radius: 16px;
-            transition: border-color 0.3s ease;
-        }
-
-        .card:hover {
-            border-color: var(--primary);
-        }
-
-        .card h3 {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .card p {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-        }
-
-        /* Roadmap */
-        .roadmap-list {
-            list-style: none;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        .roadmap-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            border-left: 2px solid var(--border);
-            position: relative;
-        }
-
-        .roadmap-item::before {
+        /* Card hover gradient overlay */
+        .card-overlay::before {
             content: '';
             position: absolute;
-            left: -7px;
-            top: 1.8rem;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--surface);
-            border: 2px solid var(--primary);
+            inset: 0;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: -1;
+            border-radius: inherit;
         }
 
-        /* Tech Stack */
-        .tech-list {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 3rem;
-            opacity: 0.8;
+        .card-overlay:hover::before {
+            opacity: 1;
         }
 
-        .tech-item {
-            text-align: center;
+        /* Card icon gradient */
+        .card-icon-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
         }
 
-        code {
-            font-family: 'JetBrains Mono', monospace;
-            background: #1a1a1d;
-            padding: 0.2rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.9em;
+        /* Roadmap timeline line */
+        .roadmap-line::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 20px;
+            width: 2px;
+            background: linear-gradient(to bottom, #3b82f6, #8b5cf6, transparent);
+            border-radius: 2px;
         }
 
-        footer {
-            padding: 4rem 0;
-            border-top: 1px solid var(--border);
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.9rem;
+        /* Primary button shimmer */
+        .btn-shimmer {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
         }
 
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 3rem;
-            }
+        .btn-shimmer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: all 0.5s ease;
+        }
 
-            .logo {
-                width: 80px;
-                height: 80px;
-            }
+        .btn-shimmer:hover::before {
+            left: 100%;
+        }
+
+        /* Footer top gradient line */
+        footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+            opacity: 0.5;
+        }
+
+        /* Fade-in animation delays */
+        .delay-1 {
+            animation-delay: 0.1s;
+        }
+
+        .delay-2 {
+            animation-delay: 0.2s;
+        }
+
+        .delay-3 {
+            animation-delay: 0.3s;
+        }
+
+        .delay-4 {
+            animation-delay: 0.4s;
         }
     </style>
 </head>
 
-<body>
+<body class="font-sans text-white leading-relaxed overflow-x-hidden">
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate-fade-in');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+            document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+        });
+    </script>
 
-    <section class="hero container">
-        <div class="logo-container">
-            <img src="clawsetapp-icon.png" alt="clawset logo" class="logo">
+    <!-- Hero -->
+    <section
+        class="min-h-screen flex flex-col justify-center items-center text-center relative pt-16 max-w-[1100px] mx-auto px-8">
+        <!-- Background glow -->
+        <div
+            class="hero-glow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] -z-10 animate-pulse-glow">
         </div>
-        <h1>clawset</h1>
-        <p class="quote">"Because an Agent without a world is just a chatbot."</p>
-        <div class="cta-btns">
-            <a href="https://github.com/webdeb/clawset.app" class="btn btn-primary">View on GitHub</a>
-            <a href="#features" class="btn btn-secondary">Explore Features</a>
+
+        <div
+            class="inline-block px-5 py-1.5 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-primary-light tracking-widest uppercase backdrop-blur-sm mb-6 opacity-0 animate-fade-in">
+            Introducing clawset</div>
+
+        <div class="mb-10 animate-float relative z-10">
+            <div
+                class="logo-glow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] opacity-40 -z-10 rounded-full opacity-0 animate-fade-in delay-1">
+            </div>
+            <img src="clawsetapp-icon.png" alt="clawset logo"
+                class="w-80 h-80 relative z-10 drop-shadow-2xl transition-transform duration-300 hover:scale-105 hover:-rotate-2 opacity-0 animate-fade-in delay-1">
+        </div>
+
+        <h1
+            class="gradient-text text-6xl md:text-7xl font-extrabold tracking-tight leading-tight mb-6 opacity-0 animate-fade-in delay-2">
+            clawset.app</h1>
+        <p class="text-xl text-zinc-400 mb-14 max-w-[650px] opacity-0 animate-fade-in delay-3">"Because an Agent without
+            a world is just a chatbot."</p>
+
+        <div class="flex gap-6 relative z-10 flex-col sm:flex-row opacity-0 animate-fade-in delay-4">
+            <a href="https://github.com/webdeb/clawset.app"
+                class="btn-shimmer px-8 py-4 rounded-xl font-semibold text-white shadow-lg shadow-primary/30 border border-white/10 flex items-center gap-2 relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/40">
+                View on GitHub
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </a>
+            <a href="#features"
+                class="px-8 py-4 rounded-xl font-semibold text-white bg-white/[0.03] border border-white/10 backdrop-blur-sm transition-all duration-300 hover:bg-white/[0.08] hover:border-white/15 hover:-translate-y-1 text-center">Explore
+                Features</a>
         </div>
     </section>
 
-    <section id="features" class="container">
-        <h2>Premium Orchestration</h2>
-        <div class="features-grid">
-            <div class="card">
-                <h3>🚀 Multipass Control</h3>
-                <p>Launch and manage Ubuntu LTS instances with native performance directly from your desktop.</p>
+    <!-- Features -->
+    <section id="features" class="py-32 max-w-[1100px] mx-auto px-8">
+        <h2 class="gradient-text text-4xl md:text-5xl font-extrabold text-center mb-4 animate-on-scroll opacity-0">
+            Premium Orchestration</h2>
+        <p class="text-center text-zinc-400 text-lg max-w-xl mx-auto mb-16 animate-on-scroll opacity-0 delay-1">Securely
+            manage and deploy your AI agents with state-of-the-art tools designed for performance and isolation.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div
+                class="card-overlay bg-surface border border-white/[0.08] p-10 rounded-2xl relative backdrop-blur-xl transition-all duration-500 ease-out overflow-hidden z-[1] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl hover:shadow-black/50 animate-on-scroll opacity-0 delay-1">
+                <div class="card-icon-gradient text-4xl mb-6 inline-block">🚀</div>
+                <h3 class="text-xl font-bold text-white mb-4">Multipass Control</h3>
+                <p class="text-zinc-400 leading-relaxed">Launch and manage Ubuntu LTS instances with native performance
+                    directly from your desktop. Total control over resource allocation.</p>
             </div>
-            <div class="card">
-                <h3>🔧 Auto-Provisioning</h3>
-                <p>One-click setup for Node.js and the complete OpenClaw stack within your isolated environments.</p>
+            <div
+                class="card-overlay bg-surface border border-white/[0.08] p-10 rounded-2xl relative backdrop-blur-xl transition-all duration-500 ease-out overflow-hidden z-[1] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl hover:shadow-black/50 animate-on-scroll opacity-0 delay-2">
+                <div class="card-icon-gradient text-4xl mb-6 inline-block">🔧</div>
+                <h3 class="text-xl font-bold text-white mb-4">Auto-Provisioning</h3>
+                <p class="text-zinc-400 leading-relaxed">One-click zero-config setup for Node.js and the complete
+                    OpenClaw stack within your beautifully isolated environments.</p>
             </div>
-            <div class="card">
-                <h3>📺 Unified Dashboard</h3>
-                <p>Seamlessly access your remote OpenClaw Gateway UI through a sandboxed embedded webview.</p>
+            <div
+                class="card-overlay bg-surface border border-white/[0.08] p-10 rounded-2xl relative backdrop-blur-xl transition-all duration-500 ease-out overflow-hidden z-[1] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl hover:shadow-black/50 animate-on-scroll opacity-0 delay-3">
+                <div class="card-icon-gradient text-4xl mb-6 inline-block">📺</div>
+                <h3 class="text-xl font-bold text-white mb-4">Unified Dashboard</h3>
+                <p class="text-zinc-400 leading-relaxed">Seamlessly access your remote OpenClaw Gateway UI through a
+                    sandboxed embedded webview directly in the rust app.</p>
             </div>
-            <div class="card">
-                <h3>🧩 AppHub Integration</h3>
-                <p>Preview and develop agents instantly. Start servers in the VM and interact with them in real-time.
-                </p>
+            <div
+                class="card-overlay bg-surface border border-white/[0.08] p-10 rounded-2xl relative backdrop-blur-xl transition-all duration-500 ease-out overflow-hidden z-[1] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl hover:shadow-black/50 animate-on-scroll opacity-0 delay-1">
+                <div class="card-icon-gradient text-4xl mb-6 inline-block">🧩</div>
+                <h3 class="text-xl font-bold text-white mb-4">AppHub Integration</h3>
+                <p class="text-zinc-400 leading-relaxed">Preview and develop agents instantly. Start servers dynamically
+                    in the VM and interact with them in real-time gracefully.</p>
             </div>
-            <div class="card">
-                <h3>📊 System Insights</h3>
-                <p>Monitor CPU, RAM, and Disk usage on the host to ensure your agents have the resources they need.</p>
+            <div
+                class="card-overlay bg-surface border border-white/[0.08] p-10 rounded-2xl relative backdrop-blur-xl transition-all duration-500 ease-out overflow-hidden z-[1] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl hover:shadow-black/50 animate-on-scroll opacity-0 delay-2">
+                <div class="card-icon-gradient text-4xl mb-6 inline-block">📊</div>
+                <h3 class="text-xl font-bold text-white mb-4">System Insights</h3>
+                <p class="text-zinc-400 leading-relaxed">Monitor real-time host CPU, RAM, and Disk usage via beautiful
+                    charts to ensure your agents are fed with the resources they need.</p>
             </div>
-            <div class="card">
-                <h3>🎨 Modern DX</h3>
-                <p>Built with HeroUI for a state-of-the-art interface that feels as powerful as the tools it manages.
-                </p>
+            <div
+                class="card-overlay bg-surface border border-white/[0.08] p-10 rounded-2xl relative backdrop-blur-xl transition-all duration-500 ease-out overflow-hidden z-[1] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-2xl hover:shadow-black/50 animate-on-scroll opacity-0 delay-3">
+                <div class="card-icon-gradient text-4xl mb-6 inline-block">🎨</div>
+                <h3 class="text-xl font-bold text-white mb-4">Modern DX</h3>
+                <p class="text-zinc-400 leading-relaxed">Built with HeroUI and Tailwind for a state-of-the-art interface
+                    that feels just as powerful and sleek as the agents it manages.</p>
             </div>
         </div>
     </section>
 
-    <section id="roadmap" class="container">
-        <h2>Roadmap</h2>
-        <div class="roadmap-list">
-            <div class="roadmap-item">
-                <div>
-                    <strong>🐋 Docker Support</strong>
-                    <p>Native container orchestration for even lighter agent deployments.</p>
+    <!-- Roadmap -->
+    <section id="roadmap" class="py-32 max-w-[1100px] mx-auto px-8">
+        <h2 class="gradient-text text-4xl md:text-5xl font-extrabold text-center mb-4 animate-on-scroll opacity-0">
+            Future Roadmap</h2>
+        <p class="text-center text-zinc-400 text-lg max-w-xl mx-auto mb-16 animate-on-scroll opacity-0 delay-1">We are
+            continuously evolving clawset to support the next generation of AI agent deployments.</p>
+
+        <div class="roadmap-line relative max-w-3xl mx-auto">
+            <div class="relative pl-16 pb-12 animate-on-scroll opacity-0 delay-1">
+                <div
+                    class="absolute left-[11px] top-[5px] w-5 h-5 rounded-full bg-bg border-[3px] border-primary shadow-lg shadow-primary/50 z-[2]">
+                </div>
+                <div
+                    class="bg-surface border border-white/[0.08] p-8 rounded-2xl backdrop-blur-sm transition-transform duration-300 hover:translate-x-1.5 hover:border-white/15">
+                    <h4 class="text-xl font-bold flex items-center gap-2 mb-3">🐋 Docker Support</h4>
+                    <p class="text-zinc-400">Native container orchestration for even lighter, faster, and more modular
+                        agent deployments.</p>
                 </div>
             </div>
-            <div class="roadmap-item">
-                <div>
-                    <strong>📦 Multi-Molt Support</strong>
-                    <p>Expanding to NanoBot, PicoClaw, ZeroClaw, and NullClaw ecosystems.</p>
+            <div class="relative pl-16 pb-12 animate-on-scroll opacity-0 delay-2">
+                <div
+                    class="absolute left-[11px] top-[5px] w-5 h-5 rounded-full bg-bg border-[3px] border-primary shadow-lg shadow-primary/50 z-[2]">
+                </div>
+                <div
+                    class="bg-surface border border-white/[0.08] p-8 rounded-2xl backdrop-blur-sm transition-transform duration-300 hover:translate-x-1.5 hover:border-white/15">
+                    <h4 class="text-xl font-bold flex items-center gap-2 mb-3">📦 Multi-Molt Support</h4>
+                    <p class="text-zinc-400">Expanding ecosystem compatibility natively to PicoClaw, ZeroClaw, NanoBot,
+                        and NullClaw agentic formats.</p>
                 </div>
             </div>
-            <div class="roadmap-item">
-                <div>
-                    <strong>🤖 Extended AI Providers</strong>
-                    <p>First-class support for Anthropic, Gemini, and local LLMs via Ollama.</p>
+            <div class="relative pl-16 animate-on-scroll opacity-0 delay-3">
+                <div
+                    class="absolute left-[11px] top-[5px] w-5 h-5 rounded-full bg-bg border-[3px] border-primary shadow-lg shadow-primary/50 z-[2]">
+                </div>
+                <div
+                    class="bg-surface border border-white/[0.08] p-8 rounded-2xl backdrop-blur-sm transition-transform duration-300 hover:translate-x-1.5 hover:border-white/15">
+                    <h4 class="text-xl font-bold flex items-center gap-2 mb-3">🤖 Extended AI Providers</h4>
+                    <p class="text-zinc-400">First-class integrated support for Anthropic Claude, Google Gemini, and
+                        fully offline local LLMs via Ollama bridging.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="container">
-        <h2>Pure Performance</h2>
-        <div class="tech-list">
-            <div class="tech-item"><strong>Rust 🦀</strong><br><small>Memory Safety</small></div>
-            <div class="tech-item"><strong>Tauri v2</strong><br><small>Lightweight Core</small></div>
-            <div class="tech-item"><strong>React 19</strong><br><small>Modern Frontend</small></div>
-            <div class="tech-item"><strong>Multipass</strong><br><small>VM Engine</small></div>
+    <!-- Tech Stack -->
+    <section class="py-32 max-w-[1100px] mx-auto px-8">
+        <h2 class="gradient-text text-4xl md:text-5xl font-extrabold text-center mb-4 animate-on-scroll opacity-0">Pure
+            Performance</h2>
+        <p class="text-center text-zinc-400 text-lg max-w-xl mx-auto mb-16 animate-on-scroll opacity-0 delay-1">Built
+            entirely with modern, blazing-fast technologies.</p>
+
+        <div class="flex justify-center flex-wrap gap-8 animate-on-scroll opacity-0 delay-2">
+            <div
+                class="bg-white/[0.02] border border-white/[0.08] py-6 px-10 rounded-2xl text-center flex flex-col gap-2 transition-all duration-300 hover:bg-white/5 hover:border-primary hover:-translate-y-1.5">
+                <strong class="font-mono text-xl text-white">Rust 🦀</strong>
+                <small class="text-zinc-400 text-sm">Memory & Thread Safety</small>
+            </div>
+            <div
+                class="bg-white/[0.02] border border-white/[0.08] py-6 px-10 rounded-2xl text-center flex flex-col gap-2 transition-all duration-300 hover:bg-white/5 hover:border-primary hover:-translate-y-1.5">
+                <strong class="font-mono text-xl text-white">Tauri v2</strong>
+                <small class="text-zinc-400 text-sm">Ultra Lightweight Core</small>
+            </div>
+            <div
+                class="bg-white/[0.02] border border-white/[0.08] py-6 px-10 rounded-2xl text-center flex flex-col gap-2 transition-all duration-300 hover:bg-white/5 hover:border-primary hover:-translate-y-1.5">
+                <strong class="font-mono text-xl text-white">React 19</strong>
+                <small class="text-zinc-400 text-sm">Dynamic Next-Gen UI</small>
+            </div>
+            <div
+                class="bg-white/[0.02] border border-white/[0.08] py-6 px-10 rounded-2xl text-center flex flex-col gap-2 transition-all duration-300 hover:bg-white/5 hover:border-primary hover:-translate-y-1.5">
+                <strong class="font-mono text-xl text-white">Multipass</strong>
+                <small class="text-zinc-400 text-sm">High Performance VMs</small>
+            </div>
         </div>
     </section>
 
-    <footer class="container">
-        <p>&copy; 2026 @webdeb &bull; MIT License &bull; Built with 🐾 for Agents</p>
+    <!-- Footer -->
+    <footer
+        class="relative overflow-hidden mt-20 pt-16 pb-12 max-w-[1100px] mx-auto px-8 border-t border-white/[0.08] text-center">
+        <div class="flex flex-col items-center gap-6">
+            <div class="text-zinc-400 text-base flex items-center justify-center flex-wrap gap-3">
+                <span>&copy; 2026 clawset.app</span>
+                <span class="w-1 h-1 bg-white/15 rounded-full"></span>
+                <span>MIT License</span>
+                <span class="w-1 h-1 bg-white/15 rounded-full"></span>
+                <span>Built with 🦀 for Agents</span>
+                <span class="w-1 h-1 bg-white/15 rounded-full"></span>
+                <span>Made by <a href="https://webdeb.de" target="_blank"
+                        class="text-white font-medium hover:text-primary-light hover:underline hover:decoration-primary hover:underline-offset-4 transition-colors duration-200 inline-flex items-center gap-1">webdeb.de</a></span>
+            </div>
+        </div>
     </footer>
-
 </body>
 
 </html>
