@@ -17,8 +17,6 @@ pub struct MultipassInstanceDetails {
     storage: Option<String>,
     node_installed: Option<String>,
     openclaw_installed: Option<bool>,
-    openclaw_running: Option<bool>,
-    openclaw_token: Option<String>,
     is_provisioning: Option<bool>,
 }
 
@@ -108,18 +106,13 @@ pub async fn get_multipass_instance_details(instance_name: &str) -> Result<Multi
         Err(_) => {}
     }
 
-    // 2. Exec inner logic in one go
+    // 2. Exec inner logic in one go (fast check only)
     let script = "
 source ~/.bashrc
 echo '===NODE==='
 node -v || echo 'NOT_FOUND'
 echo '===OPENCLAW_VER==='
 openclaw --version || echo 'NOT_FOUND'
-echo '===OPENCLAW_STATUS==='
-openclaw status || echo 'NOT_FOUND'
-echo '===OPENCLAW_JSON==='
-CONFIG_PATH=\"${OPENCLAW_CONFIG_PATH:-/home/ubuntu/clawset/openclaw/config/openclaw.json}\"
-cat \"$CONFIG_PATH\" || echo 'NOT_FOUND'
 echo '===PROVISIONING==='
 if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
 ";
@@ -130,15 +123,11 @@ if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                // Parse the output
                 let mut section = "";
-                let mut json_str = String::new();
                 for line in stdout.lines() {
                     let trim = line.trim();
                     if trim == "===NODE===" { section = "node"; continue; }
                     if trim == "===OPENCLAW_VER===" { section = "openclaw_ver"; continue; }
-                    if trim == "===OPENCLAW_STATUS===" { section = "openclaw_status"; continue; }
-                    if trim == "===OPENCLAW_JSON===" { section = "openclaw_json"; continue; }
                     if trim == "===PROVISIONING===" { section = "provisioning"; continue; }
                     
                     match section {
@@ -152,17 +141,6 @@ if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
                                 details.openclaw_installed = Some(true);
                             }
                         }
-                        "openclaw_status" => {
-                            if trim.contains("Running") || trim.contains("started") || trim.contains("active") || trim.contains("Online") || trim.contains("PID") {
-                                details.openclaw_running = Some(true);
-                            }
-                        }
-                        "openclaw_json" => {
-                            if trim != "NOT_FOUND" && !trim.is_empty() {
-                                json_str.push_str(line);
-                                json_str.push('\n');
-                            }
-                        }
                         "provisioning" => {
                             if trim == "YES" {
                                 details.is_provisioning = Some(true);
@@ -171,14 +149,6 @@ if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
                             }
                         }
                         _ => {}
-                    }
-                }
-
-                if !json_str.is_empty() {
-                    if let Ok(js) = serde_json::from_str::<Value>(&json_str) {
-                        if let Some(token) = js["gateway"]["auth"]["token"].as_str() {
-                            details.openclaw_token = Some(token.to_string());
-                        }
                     }
                 }
             }
@@ -208,6 +178,78 @@ pub async fn read_provision_log(instance_name: &str) -> Result<String, String> {
 pub async fn start_openclaw(instance_name: &str) -> Result<(), String> {
     let output = Command::new("multipass")
         .args(["start", instance_name])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn sync_openclaw_status(instance_name: &str) -> Result<String, String> {
+    let mut status_val = serde_json::json!({});
+    let mut config_val = serde_json::json!({});
+
+    // 1. Fetch OpenClaw Status
+    let status_script = "source ~/.bashrc && openclaw status --all --json";
+    if let Ok(output) = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-ic", status_script])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Ok(js) = serde_json::from_str::<Value>(&stdout) {
+                status_val = js;
+            }
+        }
+    }
+
+    // 2. Fetch OpenClaw Config
+    let config_path = "/home/ubuntu/clawset/.openclaw/openclaw.json";
+    if let Ok(output) = Command::new("multipass")
+        .args(["exec", instance_name, "--", "cat", config_path])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Ok(js) = serde_json::from_str::<Value>(&stdout) {
+                config_val = js;
+            }
+        }
+    }
+
+    // Combine into a clean JSON response
+    let response = serde_json::json!({
+        "status": status_val,
+        "config": config_val
+    });
+
+    Ok(serde_json::to_string(&response).unwrap_or_else(|_| "{\"status\":{},\"config\":{}}".to_string()))
+}
+
+#[tauri::command]
+pub async fn start_openclaw_daemon(instance_name: &str) -> Result<(), String> {
+    let script = "source ~/.bashrc && openclaw start"; // or openclaw daemon start depending on CLI
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-ic", script])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn stop_openclaw_daemon(instance_name: &str) -> Result<(), String> {
+    let script = "source ~/.bashrc && openclaw stop"; // or openclaw daemon stop
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
         .map_err(|e| e.to_string())?;
 

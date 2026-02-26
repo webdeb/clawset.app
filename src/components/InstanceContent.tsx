@@ -1,17 +1,31 @@
 import { Card, Chip, Button, Spinner } from "@heroui/react";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useMultipass } from "../context/MultipassContext";
 
 import { InstanceProvision } from "./InstanceProvision";
+import { InstanceOpenClawStatus } from "./InstanceOpenClawStatus";
 
 export function InstanceContent() {
-  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName } = useMultipass();
+  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName, syncOpenclawStatus } = useMultipass();
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [isSyncingStatus, setIsSyncingStatus] = useState(false);
 
   const isThisInstanceProvisioning = 
     provisioningInstanceName === selectedInstance?.name || 
     selectedInstance?.isProvisioning === true;
+
+  // Run status sync once when instance is selected and openclaw is installed
+  useEffect(() => {
+    if (selectedInstance && selectedInstance.openclawInstalled && !selectedInstance.openclawStatus) {
+      if (!isSyncingStatus && !isThisInstanceProvisioning) {
+        setIsSyncingStatus(true);
+        syncOpenclawStatus(selectedInstance.name).finally(() => {
+          setIsSyncingStatus(false);
+        });
+      }
+    }
+  }, [selectedInstance?.name, selectedInstance?.openclawInstalled, selectedInstance?.openclawStatus, isThisInstanceProvisioning]);
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -56,7 +70,7 @@ export function InstanceContent() {
   }
 
   return (
-    <div className="w-screen flex items-start justify-center bg-background text-foreground p-8 overflow-y-auto">
+    <div className="w-full min-h-full flex flex-col items-center bg-background text-foreground p-8">
       <Card className="p-6 w-full max-w-2xl flex flex-col gap-6">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-3">
@@ -86,6 +100,13 @@ export function InstanceContent() {
             <span className="font-medium font-mono text-sm">{selectedInstance.storage || "Unknown"}</span>
           </div>
         </div>
+
+        {selectedInstance.hostPathFolder && (
+          <div className="flex flex-col gap-1 border border-default-200 rounded-lg p-3 bg-default-50/50">
+            <span className="text-xs text-default-500 uppercase font-semibold tracking-wider">Host Mount Path</span>
+            <span className="font-medium font-mono text-sm">{selectedInstance.hostPathFolder}</span>
+          </div>
+        )}
 
         <div className="flex flex-col gap-3 mt-2">
           <h3 className="text-sm font-semibold border-b pb-2 uppercase tracking-wide text-default-600 flex justify-between items-center">
@@ -131,43 +152,18 @@ export function InstanceContent() {
                       variant="ghost" 
                       className="bg-secondary/10 text-secondary" 
                       onPress={handleProvisionInstance}
-                      isDisabled={provisioningInstanceName !== null || selectedInstance.isProvisioning} // disable if ANY instance is provisioning or this one is
+                      isDisabled={provisioningInstanceName !== null || selectedInstance.isProvisioning}
                     >
                       Install Node & OpenClaw
                     </Button>
                   )}
-                  <Chip size="sm" color={selectedInstance.openclawInstalled ? "success" : "default"} variant="soft">
-                    {selectedInstance.openclawInstalled ? "Yes" : "No"}
+                  <Chip size="sm" color={selectedInstance.openclawInstalled ? "success" : "default"} variant="soft" className="font-semibold px-2">
+                    {selectedInstance.openclawInstalled ? "Yeah" : "No"}
                   </Chip>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center py-1">
-                <span className="text-default-600 text-sm">OpenClaw Process</span>
-                <Chip size="sm" color={selectedInstance.openclawRunning ? "success" : "default"} variant="soft">
-                  {selectedInstance.openclawRunning ? "Active" : "Inactive"}
-                </Chip>
-              </div>
-              
-              <div className="flex flex-col gap-1 mt-2">
-                <span className="text-default-600 text-sm">Gateway Token</span>
-                {selectedInstance.openclawToken ? (
-                  <div className="bg-default-100 p-2 rounded text-xs font-mono break-all text-default-700 select-all border border-default-200">
-                    {selectedInstance.openclawToken}
-                  </div>
-                ) : (
-                  <span className="text-default-400 text-xs italic">Unable to retrieve token</span>
-                )}
-              </div>
-
-              {selectedInstance.hostPathFolder && (
-                <div className="flex flex-col gap-1 mt-2">
-                  <span className="text-default-600 text-sm">Host Mount Path</span>
-                  <div className="bg-default-100 p-2 rounded text-xs font-mono break-all text-default-700 select-all border border-default-200">
-                    {selectedInstance.hostPathFolder}
-                  </div>
-                </div>
-              )}
+              <InstanceOpenClawStatus isSyncingStatus={isSyncingStatus} />
             </>
           )}
         </div>

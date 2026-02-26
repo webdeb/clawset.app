@@ -71,15 +71,12 @@ CONFIG_DIR="$WORKSPACE_DIR/.openclaw"
 # Set for current script
 export OPENCLAW_WORKSPACE_DIR="$WORKSPACE_DIR"
 export OPENCLAW_CONFIG_DIR="$CONFIG_DIR"
+export OPENCLAW_STATE_DIR="$CONFIG_DIR"
 
 # Persist for ubuntu user profile
 echo "export OPENCLAW_WORKSPACE_DIR=\"$WORKSPACE_DIR\"" >> ~/.bashrc
 echo "export OPENCLAW_CONFIG_DIR=\"$CONFIG_DIR\"" >> ~/.bashrc
-
-# Ensure the config dir exists if clawset is already mounted
-if [ -d "$WORKSPACE_DIR" ]; then
-  mkdir -p "$CONFIG_DIR"
-fi
+echo "export OPENCLAW_STATE_DIR=\"$CONFIG_DIR\"" >> ~/.bashrc
 
 # -------------------------
 # Install openclaw (arm64 fix)

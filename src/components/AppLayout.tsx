@@ -125,7 +125,7 @@ export function AppLayout() {
       </header>
       
       {/* Dynamic Content rendered securely via Router Outlet */}
-      <main className="flex-1 w-full bg-transparent overflow-hidden relative">
+      <main className="flex-1 w-full bg-transparent overflow-y-auto relative">
         <Outlet />
       </main>
     </div>

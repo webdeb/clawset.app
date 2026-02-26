@@ -18,8 +18,8 @@ export interface MultipassInstance {
   storage?: string;
   nodeInstalled?: string;
   openclawInstalled?: boolean;
-  openclawRunning?: boolean;
-  openclawToken?: string;
+  openclawStatus?: any;
+  openclawConfig?: any;
   isProvisioning?: boolean;
 }
 
@@ -46,6 +46,7 @@ interface MultipassContextType {
   installInstance: (name: string, memory: string, cpus: string, disk: string) => Promise<void>;
   provisionInstance: (name: string, hostPath: string) => Promise<void>;
   startInstance: (name: string) => Promise<void>;
+  syncOpenclawStatus: (name: string) => Promise<void>;
 }
 
 const MultipassContext = createContext<MultipassContextType | undefined>(undefined);
@@ -121,8 +122,6 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
             storage: details.storage || undefined,
             nodeInstalled: details.node_installed || undefined,
             openclawInstalled: details.openclaw_installed || false,
-            openclawRunning: details.openclaw_running || false,
-            openclawToken: details.openclaw_token || undefined,
             isProvisioning: newProvisioningState,
           };
         }
@@ -278,6 +277,22 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const syncOpenclawStatus = async (name: string) => {
+    try {
+      const rawJsonString: string = await invoke("sync_openclaw_status", { instanceName: name });
+      const parsed = JSON.parse(rawJsonString);
+      setInstances(prev => prev.map(inst => 
+        inst.name === name ? { 
+            ...inst, 
+            openclawStatus: parsed.status,
+            openclawConfig: parsed.config
+        } : inst
+      ));
+    } catch(e) {
+      console.error(`Failed to sync OpenClaw status for ${name}:`, e);
+    }
+  };
+
   const value = {
     isMultipassInstalled,
     instances,
@@ -292,7 +307,8 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     installInstance,
     provisioningInstanceName,
     provisionInstance,
-    startInstance
+    startInstance,
+    syncOpenclawStatus
   };
 
   console.log("MultipassContext value:", value);
