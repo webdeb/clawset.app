@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: boolean }) {
   const { selectedInstance, syncOpenclawStatus } = useMultipass();
-  const [loadingAction, setLoadingAction] = useState<"start" | "stop" | null>(null);
+  const [loadingAction, setLoadingAction] = useState<"start" | "stop" | "init" | null>(null);
 
   if (!selectedInstance || !selectedInstance.openclawInstalled) {
     return null;
@@ -28,6 +28,50 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
       setLoadingAction(null);
     }
   };
+
+  const generateRandomToken = () => {
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  };
+
+  const initDefaultConfig = async () => {
+    setLoadingAction("init");
+    try {
+      const generatedToken = generateRandomToken();
+      const newConfig = {
+        agents: {
+          defaults: {
+            workspace: "/home/ubuntu/clawset"
+          }
+        },
+        gateway: {
+          port: 18789,
+          mode: "local",
+          bind: "lan",
+          auth: {
+            mode: "token",
+            token: generatedToken
+          },
+          controlUi: {
+            dangerouslyDisableDeviceAuth: true
+          }
+        }
+      };
+
+      await invoke("write_openclaw_config", {
+        instanceName: selectedInstance.name,
+        configJson: JSON.stringify(newConfig, null, 2)
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      await syncOpenclawStatus(selectedInstance.name);
+      setLoadingAction(null);
+    }
+  };
+
+  const isConfigMissing = !config || Object.keys(config).length === 0;
 
   return (
     <Card className="p-4 bg-default-50 border border-default-200 mt-4 flex flex-col gap-4 shadow-sm">
@@ -130,13 +174,28 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
 
       <details className="mt-0 text-sm group">
           <summary className="cursor-pointer font-semibold text-default-500 flex items-center gap-2 select-none list-none marker:hidden">
-            View Raw Config
+            Configuration
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
           </summary>
           <div className="pt-3">
-            <pre className="p-3 bg-default-100 rounded-lg text-[10px] overflow-x-auto max-h-64 border border-default-200">
-              {JSON.stringify(config, null, 2)}
-            </pre>
+            {isConfigMissing ? (
+              <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg flex flex-col items-center justify-center gap-3">
+                <span className="text-warning text-xs text-center">No `openclaw.json` config found on instance.</span>
+                <Button 
+                   size="sm" 
+                   className="bg-warning/20 text-warning"
+                   onPress={initDefaultConfig}
+                   isDisabled={loadingAction !== null}
+                >
+                  {loadingAction === "init" && <Spinner size="sm" color="warning" />}
+                  Generate Initial Config
+                </Button>
+              </div>
+            ) : (
+              <pre className="p-3 bg-default-100 rounded-lg text-[10px] overflow-x-auto max-h-64 border border-default-200">
+                {JSON.stringify(config, null, 2)}
+              </pre>
+            )}
           </div>
       </details>
     </Card>

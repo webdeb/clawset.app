@@ -62,6 +62,7 @@ pub fn run() {
             instance_control::get_multipass_instance_details,
             instance_control::start_openclaw,
             instance_control::sync_openclaw_status,
+            instance_control::write_openclaw_config,
             instance_control::start_openclaw_daemon,
             instance_control::stop_openclaw_daemon,
             instance_provision::install_openclaw,

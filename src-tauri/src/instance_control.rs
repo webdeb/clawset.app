@@ -231,6 +231,23 @@ pub async fn sync_openclaw_status(instance_name: &str) -> Result<String, String>
 }
 
 #[tauri::command]
+pub async fn write_openclaw_config(instance_name: &str, config_json: &str) -> Result<(), String> {
+    let config_path = "/home/ubuntu/clawset/.openclaw/openclaw.json";
+    let write_cmd = format!("mkdir -p /home/ubuntu/clawset/.openclaw && cat << 'EOF' > {}\n{}\nEOF", config_path, config_json);
+
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-c", &write_cmd])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
 pub async fn start_openclaw_daemon(instance_name: &str) -> Result<(), String> {
     let script = "source ~/.bashrc && openclaw start"; // or openclaw daemon start depending on CLI
     let output = Command::new("multipass")
