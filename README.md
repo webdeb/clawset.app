@@ -38,7 +38,7 @@ Managing secure local environments for agents can be complex. Clawset simplifies
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Building locally
 
 ### Prerequisites
 
