@@ -20,6 +20,7 @@ export interface MultipassInstance {
   openclawInstalled?: boolean;
   openclawStatus?: any;
   openclawConfig?: any;
+  agentAuth?: any;
   isProvisioning?: boolean;
 }
 
@@ -47,6 +48,7 @@ interface MultipassContextType {
   provisionInstance: (name: string, hostPath: string) => Promise<void>;
   startInstance: (name: string) => Promise<void>;
   syncOpenclawStatus: (name: string) => Promise<void>;
+  syncAgentAuth: (name: string) => Promise<void>;
 }
 
 const MultipassContext = createContext<MultipassContextType | undefined>(undefined);
@@ -293,6 +295,21 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const syncAgentAuth = async (name: string) => {
+    try {
+      const rawJsonString: string = await invoke("read_agent_auth", { instanceName: name });
+      const parsed = JSON.parse(rawJsonString);
+      setInstances(prev => prev.map(inst => 
+        inst.name === name ? { 
+            ...inst, 
+            agentAuth: parsed
+        } : inst
+      ));
+    } catch(e) {
+      console.error(`Failed to sync agent auth for ${name}:`, e);
+    }
+  };
+
   const value = {
     isMultipassInstalled,
     instances,
@@ -308,7 +325,8 @@ export function MultipassProvider({ children }: { children: ReactNode }) {
     provisioningInstanceName,
     provisionInstance,
     startInstance,
-    syncOpenclawStatus
+    syncOpenclawStatus,
+    syncAgentAuth
   };
 
   console.log("MultipassContext value:", value);

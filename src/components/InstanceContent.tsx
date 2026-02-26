@@ -7,7 +7,7 @@ import { InstanceProvision } from "./InstanceProvision";
 import { InstanceOpenClawStatus } from "./InstanceOpenClawStatus";
 
 export function InstanceContent() {
-  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName, syncOpenclawStatus } = useMultipass();
+  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName, syncOpenclawStatus, syncAgentAuth } = useMultipass();
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [isSyncingStatus, setIsSyncingStatus] = useState(false);
 
@@ -20,7 +20,10 @@ export function InstanceContent() {
     if (selectedInstance && selectedInstance.openclawInstalled && !selectedInstance.openclawStatus) {
       if (!isSyncingStatus && !isThisInstanceProvisioning) {
         setIsSyncingStatus(true);
-        syncOpenclawStatus(selectedInstance.name).finally(() => {
+        Promise.all([
+           syncOpenclawStatus(selectedInstance.name),
+           syncAgentAuth(selectedInstance.name)
+        ]).finally(() => {
           setIsSyncingStatus(false);
         });
       }

@@ -1,8 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Webview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
+import { invoke } from "@tauri-apps/api/core";
+import { Button, Card, Spinner, Input } from "@heroui/react";
 import { useMultipass } from "../context/MultipassContext";
+import { createAuthorizationFlow, exchangeAuthorizationCode } from "../lib/login-codex";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface DashboardContentProps {
   url: string;
@@ -71,7 +75,11 @@ export function DashboardContent({ url, navbarHeight }: DashboardContentProps) {
 }
 
 export function DashboardContentRouteWrapper() {
-  const { selectedInstance, isMultipassInstalled } = useMultipass();
+  const { selectedInstance, isMultipassInstalled, syncAgentAuth } = useMultipass();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [pastedUrl, setPastedUrl] = useState("");
+  const [pkceState, setPkceState] = useState<{verifier: string, state: string} | null>(null);
 
   if (!isMultipassInstalled || !selectedInstance) return null;
   
@@ -79,6 +87,154 @@ export function DashboardContentRouteWrapper() {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-default-500">
         <p>Instance is not running or IP is unavailable.</p>
+      </div>
+    );
+  }
+
+  // Check if agent auth has been set up yet
+  const hasCodexAuth = selectedInstance.agentAuth?.profiles?.["openai-codex:default"]?.access;
+
+  if (!hasCodexAuth) {
+    const handleLogin = async () => {
+        setIsLoggingIn(true);
+        try {
+            const { url, verifier, state } = await createAuthorizationFlow();
+            console.log("Login URL:", url);
+
+            setPkceState({ verifier, state });
+            
+            // Open the user's default system browser to the auth URL
+            await openUrl(url);
+            setShowTokenInput(true);
+        } catch (e) {
+            console.error("Failed to start login flow:", e);
+            alert(`Failed to start login flow: ${e}`);
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
+
+    const handleUrlPaste = async () => {
+        if (!pastedUrl.trim()) return;
+        if (!pkceState) {
+            alert("Login session invalid. Please click 'Login with OpenAI' again.");
+            return;
+        }
+
+        setIsLoggingIn(true);
+        try {
+            const interceptedUrlObj = new URL(pastedUrl);
+            const code = interceptedUrlObj.searchParams.get("code");
+            const returnedState = interceptedUrlObj.searchParams.get("state");
+
+            if (returnedState !== pkceState.state) {
+                throw new Error("Invalid state parameter returned from OpenAI. For security, please try again.");
+            }
+
+            if (!code) throw new Error("No authorization code found in the pasted URL.");
+            
+            const tokenData = await exchangeAuthorizationCode(code, pkceState.verifier);
+            
+            // Re-merge with existing auth-profiles.json properties
+            const authPayload = {
+                version: 1,
+                profiles: {
+                    ...(selectedInstance.agentAuth?.profiles || {}),
+                    "openai-codex:default": {
+                        type: "oauth",
+                        provider: "openai-codex",
+                        access: tokenData.access,
+                        refresh: tokenData.refresh,
+                        expires: tokenData.expires,
+                        accountId: tokenData.accountId
+                    }
+                },
+                lastGood: {
+                    ...(selectedInstance.agentAuth?.lastGood || {}),
+                    "openai-codex": "openai-codex:default"
+                },
+                usageStats: {
+                    ...(selectedInstance.agentAuth?.usageStats || {}),
+                    "openai-codex:default": {
+                        lastUsed: Date.now(),
+                        errorCount: 0
+                    }
+                }
+            };
+
+            await invoke("write_agent_auth", { 
+                instanceName: selectedInstance.name, 
+                authJson: JSON.stringify(authPayload, null, 2) 
+            });
+            
+            // Refetch the data so we bypass this screen on next render cycle
+            await syncAgentAuth(selectedInstance.name);
+            setShowTokenInput(false);
+        } catch (e: any) {
+            console.error("Token exchange failed:", e);
+            alert(`Token Exchange Failed: ${e.message || e}`);
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
+
+    return (
+      <div className="w-full min-h-full flex flex-col items-center justify-center bg-background text-foreground p-8 overflow-y-auto">
+        <Card className="p-8 max-w-md flex flex-col items-center justify-center gap-6 shadow-sm border border-default-200">
+          <div className="flex flex-col items-center text-center gap-2">
+             <div className="w-12 h-12 bg-default-100 rounded-xl flex items-center justify-center mb-2 animate-pulse-slow">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-default-700"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/></svg>
+             </div>
+             <h2 className="text-xl font-bold">OpenAI Authentication Required</h2>
+             <p className="text-sm text-default-500">You must authorize ChatGPT to let OpenClaw access and operate the Codex Agent.</p>
+          </div>
+          
+          {!showTokenInput ? (
+              <div className="w-full flex justify-center flex-col gap-2">
+                 <Button 
+                    className="w-full bg-black text-white px-8" 
+                    size="lg"
+                    isDisabled={isLoggingIn}
+                    onPress={handleLogin}
+                 >
+                    {isLoggingIn && <Spinner size="sm" color="current" />}
+                    Login with OpenAI in Browser
+                 </Button>
+                 <p className="text-[10px] text-default-400 text-center uppercase tracking-wide">
+                    Proceeds to auth.openai.com
+                 </p>
+              </div>
+          ) : (
+              <div className="w-full flex justify-center flex-col gap-3 animate-fade-in">
+                 <p className="text-xs text-default-600 font-medium">
+                     After completing the browser login, you will be redirected to an unreachable page. Copy that full URL from your browser's address bar and paste it below.
+                 </p>
+                 <Input 
+                    type="text" 
+                    placeholder="http://localhost:1455/auth/callback?code=..." 
+                    value={pastedUrl}
+                    onChange={(e) => setPastedUrl(e.target.value)}
+                 />
+                 <Button 
+                    className="w-full bg-primary text-white" 
+                    size="lg"
+                    isDisabled={isLoggingIn || !pastedUrl.trim()}
+                    onPress={handleUrlPaste}
+                 >
+                    {isLoggingIn && <Spinner size="sm" color="current" />}
+                    Submit Code
+                 </Button>
+                 <Button 
+                    variant="ghost" 
+                    className="text-xs text-default-600 border-none"
+                    isDisabled={isLoggingIn}
+                    onPress={() => setShowTokenInput(false)}
+                 >
+                    Cancel
+                 </Button>
+              </div>
+          )}
+        </Card>
       </div>
     );
   }

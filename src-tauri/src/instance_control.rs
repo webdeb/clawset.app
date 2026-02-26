@@ -276,3 +276,35 @@ pub async fn stop_openclaw_daemon(instance_name: &str) -> Result<(), String> {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
+
+#[tauri::command]
+pub async fn read_agent_auth(instance_name: &str) -> Result<String, String> {
+    let path = "/home/ubuntu/clawset/.openclaw/agents/main/agent/auth-profiles.json";
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "cat", path])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Ok("{}".to_string()) // If file missing, treat as empty object
+    }
+}
+
+#[tauri::command]
+pub async fn write_agent_auth(instance_name: &str, auth_json: &str) -> Result<(), String> {
+    let path = "/home/ubuntu/clawset/.openclaw/agents/main/agent/auth-profiles.json";
+    let write_cmd = format!("mkdir -p /home/ubuntu/clawset/.openclaw/agents/main/agent && cat << 'EOF' > {}\n{}\nEOF", path, auth_json);
+
+    let output = Command::new("multipass")
+        .args(["exec", instance_name, "--", "bash", "-c", &write_cmd])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
