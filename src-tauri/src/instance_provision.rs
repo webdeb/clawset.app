@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use tauri::Emitter;
+use crate::multipass;
 
 pub fn run_and_stream(app: &tauri::AppHandle, mut command: Command, error_prefix: &str) -> Result<(), String> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -47,7 +48,7 @@ pub async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, memory
 
     // Launch an Ubuntu LTS instance with the designated parameters
     let _ = app.emit("provision-log", "Launching Ubuntu LTS instance (this may take a while)...".to_string());
-    let mut launch = Command::new("multipass");
+    let mut launch = Command::new(multipass::get_multipass_path());
     launch.args([
         "launch",
         "-v",
@@ -71,16 +72,10 @@ pub async fn install_openclaw(app: tauri::AppHandle, instance_name: &str, memory
 pub async fn provision_instance(app: tauri::AppHandle, instance_name: &str, shared_folder: &str) -> Result<(), String> {
     let _ = app.emit("provision-log", format!("Starting existing instance setup for {}", instance_name));
     
-    // 1. Copy default configurations into the shared folder before mounting
-    let _ = app.emit("provision-log", "Copying default configurations...".to_string());
-    let mut cp_cmd = Command::new("cp");
-    cp_cmd.args(["-rv", "setup-instance/default-config/clawset/.", shared_folder]);
-    let _ = run_and_stream(&app, cp_cmd, "Failed to copy config");
-
     // 2. Mount the shared folder if it's not already mounted (or at least try)
     // We ignore errors here because it might already be mounted
     let _ = app.emit("provision-log", format!("Mounting shared folder to {}:/home/ubuntu/clawset...", instance_name));
-    let mut mount = Command::new("multipass");
+    let mut mount = Command::new(multipass::get_multipass_path());
     mount.args([
         "mount",
         shared_folder,
@@ -94,7 +89,7 @@ pub async fn provision_instance(app: tauri::AppHandle, instance_name: &str, shar
     // 3. Transfer provisioning script to the VM
     let _ = app.emit("provision-log", "Transferring provisioning script...".to_string());
     
-    let mut transfer = Command::new("multipass");
+    let mut transfer = Command::new(multipass::get_multipass_path());
     transfer.args([
         "transfer",
         "setup-instance/provision.sh",
@@ -115,7 +110,7 @@ pub async fn provision_instance(app: tauri::AppHandle, instance_name: &str, shar
         ' </dev/null >/dev/null 2>&1 &
     "#;
 
-    let mut provision = Command::new("multipass");
+    let mut provision = Command::new(multipass::get_multipass_path());
     provision.args([
         "exec",
         instance_name,

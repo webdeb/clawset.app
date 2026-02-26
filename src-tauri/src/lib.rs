@@ -1,3 +1,4 @@
+mod multipass;
 pub mod instance_control;
 pub mod instance_provision;
 

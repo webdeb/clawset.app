@@ -1,5 +1,6 @@
 use serde_json::Value;
 use std::process::Command;
+use crate::multipass;
 
 #[derive(serde::Serialize, Default)]
 pub struct MultipassListInfo {
@@ -22,7 +23,7 @@ pub struct MultipassInstanceDetails {
 
 #[tauri::command]
 pub async fn check_multipass() -> Result<bool, String> {
-    match Command::new("multipass").arg("version").output() {
+    match Command::new(multipass::get_multipass_path()).arg("version").output() {
         Ok(output) => Ok(output.status.success()),
         Err(_) => Ok(false),
     }
@@ -30,7 +31,7 @@ pub async fn check_multipass() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn list_multipass_instances() -> Result<Vec<MultipassListInfo>, String> {
-    match Command::new("multipass").args(["list", "--format", "json"]).output() {
+    match Command::new(multipass::get_multipass_path()).args(["list", "--format", "json"]).output() {
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -70,7 +71,7 @@ pub async fn get_multipass_instance_details(instance_name: &str) -> Result<Multi
     let mut details = MultipassInstanceDetails::default();
 
     // 1. Get info
-    match Command::new("multipass")
+    match Command::new(multipass::get_multipass_path())
         .args(["info", instance_name, "--format", "json"])
         .output()
     {
@@ -116,7 +117,7 @@ openclaw --version || echo 'NOT_FOUND'
 echo '===PROVISIONING==='
 if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
 ";
-    match Command::new("multipass")
+    match Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
     {
@@ -161,7 +162,7 @@ if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi
 
 #[tauri::command]
 pub async fn read_provision_log(instance_name: &str) -> Result<String, String> {
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "cat", "/tmp/provision.log"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -176,7 +177,7 @@ pub async fn read_provision_log(instance_name: &str) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn start_openclaw(instance_name: &str) -> Result<(), String> {
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["start", instance_name])
         .output()
         .map_err(|e| e.to_string())?;
@@ -195,7 +196,7 @@ pub async fn sync_openclaw_status(instance_name: &str) -> Result<String, String>
 
     // 1. Fetch OpenClaw Status
     let status_script = "source ~/.bashrc && openclaw status --all --json";
-    if let Ok(output) = Command::new("multipass")
+    if let Ok(output) = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-ic", status_script])
         .output()
     {
@@ -209,7 +210,7 @@ pub async fn sync_openclaw_status(instance_name: &str) -> Result<String, String>
 
     // 2. Fetch OpenClaw Config
     let config_path = "/home/ubuntu/clawset/.openclaw/openclaw.json";
-    if let Ok(output) = Command::new("multipass")
+    if let Ok(output) = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "cat", config_path])
         .output()
     {
@@ -235,7 +236,7 @@ pub async fn write_openclaw_config(instance_name: &str, config_json: &str) -> Re
     let config_path = "/home/ubuntu/clawset/.openclaw/openclaw.json";
     let write_cmd = format!("mkdir -p /home/ubuntu/clawset/.openclaw && cat << 'EOF' > {}\n{}\nEOF", config_path, config_json);
 
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-c", &write_cmd])
         .output()
         .map_err(|e| e.to_string())?;
@@ -250,7 +251,7 @@ pub async fn write_openclaw_config(instance_name: &str, config_json: &str) -> Re
 #[tauri::command]
 pub async fn start_openclaw_daemon(instance_name: &str) -> Result<(), String> {
     let script = "source ~/.bashrc && openclaw gateway start"; // or openclaw daemon start depending on CLI
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
         .map_err(|e| e.to_string())?;
@@ -265,7 +266,7 @@ pub async fn start_openclaw_daemon(instance_name: &str) -> Result<(), String> {
 #[tauri::command]
 pub async fn stop_openclaw_daemon(instance_name: &str) -> Result<(), String> {
     let script = "source ~/.bashrc && openclaw gateway stop"; // or openclaw daemon stop
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
         .map_err(|e| e.to_string())?;
@@ -280,7 +281,7 @@ pub async fn stop_openclaw_daemon(instance_name: &str) -> Result<(), String> {
 #[tauri::command]
 pub async fn read_agent_auth(instance_name: &str) -> Result<String, String> {
     let path = "/home/ubuntu/clawset/.openclaw/agents/main/agent/auth-profiles.json";
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "cat", path])
         .output()
         .map_err(|e| e.to_string())?;
@@ -297,7 +298,7 @@ pub async fn write_agent_auth(instance_name: &str, auth_json: &str) -> Result<()
     let path = "/home/ubuntu/clawset/.openclaw/agents/main/agent/auth-profiles.json";
     let write_cmd = format!("mkdir -p /home/ubuntu/clawset/.openclaw/agents/main/agent && cat << 'EOF' > {}\n{}\nEOF", path, auth_json);
 
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-c", &write_cmd])
         .output()
         .map_err(|e| e.to_string())?;
@@ -313,7 +314,7 @@ pub async fn write_agent_auth(instance_name: &str, auth_json: &str) -> Result<()
 pub async fn check_apphub_status(instance_name: &str) -> Result<bool, String> {
     // curl the port to see if a web server is responding
     let script = "curl -s http://127.0.0.1:3000 > /dev/null";
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-c", script])
         .output()
         .map_err(|e| e.to_string())?;
@@ -327,7 +328,7 @@ pub async fn start_apphub(instance_name: &str) -> Result<(), String> {
     // We launch npm run dev in the background under ~/clawset/apphub
     let script = "source ~/.bashrc && cd ~/clawset/apphub && nohup npm run dev > apphub.log 2>&1 &";
     
-    let output = Command::new("multipass")
+    let output = Command::new(multipass::get_multipass_path())
         .args(["exec", instance_name, "--", "bash", "-ic", script])
         .output()
         .map_err(|e| e.to_string())?;

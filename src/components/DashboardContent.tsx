@@ -75,18 +75,52 @@ export function DashboardContent({ url, navbarHeight }: DashboardContentProps) {
 }
 
 export function DashboardContentRouteWrapper() {
-  const { selectedInstance, isMultipassInstalled, syncAgentAuth } = useMultipass();
+  const { selectedInstance, isMultipassInstalled, syncAgentAuth, syncOpenclawStatus, loading: contextLoading } = useMultipass();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [showTokenInput, setShowTokenInput] = useState(false);
   const [pastedUrl, setPastedUrl] = useState("");
   const [pkceState, setPkceState] = useState<{verifier: string, state: string} | null>(null);
 
-  if (!isMultipassInstalled || !selectedInstance) return null;
+  useEffect(() => {
+    if (selectedInstance?.name && selectedInstance.status === "Running" && selectedInstance.ip) {
+        setIsSyncing(true);
+        Promise.all([
+            syncAgentAuth(selectedInstance.name),
+            syncOpenclawStatus(selectedInstance.name)
+        ]).finally(() => setIsSyncing(false));
+    }
+  }, [selectedInstance?.name, selectedInstance?.status, selectedInstance?.ip]);
+
+  if (!isMultipassInstalled) {
+    return (
+      <div className="w-full h-full flex items-center justify-center p-8 text-center flex-col gap-4">
+        <h2 className="text-xl font-bold">Multipass Not Found</h2>
+        <p className="text-default-500">Please install Multipass to use this application.</p>
+      </div>
+    );
+  }
+
+  if (contextLoading || !selectedInstance || (isSyncing && !selectedInstance.agentAuth)) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-background">
+        <Spinner size="lg" color="current" />
+        <div className="flex flex-col items-center gap-1">
+            <p className="text-primary font-medium">Initializing System...</p>
+            <p className="text-sm text-default-400 animate-pulse">Syncing instance status...</p>
+        </div>
+      </div>
+    );
+  }
   
   if (selectedInstance.status !== "Running" || !selectedInstance.ip) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center text-default-500">
-        <p>Instance is not running or IP is unavailable.</p>
+      <div className="w-full h-full flex flex-col items-center justify-center text-default-500 gap-4">
+        <div className="w-16 h-16 bg-default-100 rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-default-400"><path d="M12 22v-4"/><path d="M12 6V2"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.9 4.9 2.9 2.9"/><path d="m16.2 16.2 2.9 2.9"/><path d="m4.9 19.1 2.9-2.9"/><path d="m16.2 7.8 2.9-2.9"/></svg>
+        </div>
+        <p>Instance <b>{selectedInstance.name}</b> is {selectedInstance.status.toLowerCase()}.</p>
+        <Button variant="outline" onPress={() => window.location.reload()}>Retry Sync</Button>
       </div>
     );
   }
@@ -182,7 +216,7 @@ export function DashboardContentRouteWrapper() {
       <div className="w-full min-h-full flex flex-col items-center justify-center bg-background text-foreground p-8 overflow-y-auto">
         <Card className="p-8 max-w-md flex flex-col items-center justify-center gap-6 shadow-sm border border-default-200">
           <div className="flex flex-col items-center text-center gap-2">
-             <div className="w-12 h-12 bg-default-100 rounded-xl flex items-center justify-center mb-2 animate-pulse-slow">
+             <div className="w-12 h-12 bg-default-100 rounded-xl flex items-center justify-center mb-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-default-700"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/></svg>
              </div>
              <h2 className="text-xl font-bold">OpenAI Authentication Required</h2>
