@@ -36,7 +36,7 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   };
 
-  const OPENCLAW_CONFIG_PATH = "/home/ubuntu/clawset/.openclaw/openclaw.json";
+  const OPENCLAW_CONFIG_PATH = "${HOME}/clawset/.openclaw/openclaw.json";
 
   const initDefaultConfig = async () => {
     setLoadingAction("init");
@@ -45,7 +45,7 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
       const newConfig = {
         agents: {
           defaults: {
-            workspace: "/home/ubuntu/clawset"
+            workspace: "${HOME}/clawset"
           }
         },
         gateway: {

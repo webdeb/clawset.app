@@ -1,4 +1,6 @@
-// Get detailed info for a single Multipass instance
+// Get detailed VM info for a single Multipass instance
+// NOTE: This only returns machine-level info. App-specific status
+// (node, openclaw, provisioning) comes from the agent app's status script.
 var instanceId = clawset.env("INSTANCE_ID");
 var result = clawset.shell("multipass", ["info", instanceId, "--format", "json"]);
 
@@ -47,37 +49,6 @@ if (info.ipv4 && info.ipv4.length > 0) {
     ip = info.ipv4[0];
 }
 
-// Check node/openclaw/provisioning status inside the VM
-var innerResult = clawset.shell("multipass", [
-    "exec", instanceId, "--", "bash", "-ic",
-    "source ~/.bashrc; echo '===NODE==='; node -v || echo 'NOT_FOUND'; echo '===OPENCLAW_VER==='; openclaw --version || echo 'NOT_FOUND'; echo '===PROVISIONING==='; if [ -f /tmp/provisioning ]; then echo 'YES'; else echo 'NO'; fi"
-]);
-
-var nodeInstalled = null;
-var openclawInstalled = false;
-var isProvisioning = false;
-
-if (innerResult.exitCode === 0) {
-    var lines = innerResult.stdout.split("\n");
-    var section = "";
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim();
-        if (line === "===NODE===") { section = "node"; continue; }
-        if (line === "===OPENCLAW_VER===") { section = "openclaw"; continue; }
-        if (line === "===PROVISIONING===") { section = "provisioning"; continue; }
-
-        if (section === "node" && line !== "NOT_FOUND" && line !== "") {
-            nodeInstalled = line;
-        }
-        if (section === "openclaw" && line !== "NOT_FOUND" && line !== "") {
-            openclawInstalled = true;
-        }
-        if (section === "provisioning") {
-            isProvisioning = (line === "YES");
-        }
-    }
-}
-
 return {
     id: instanceId,
     name: instanceId,
@@ -92,8 +63,5 @@ return {
         memory: memory,
         storage: storage
     },
-    mounts: mounts,
-    node_installed: nodeInstalled,
-    openclaw_installed: openclawInstalled,
-    is_provisioning: isProvisioning
+    mounts: mounts
 };

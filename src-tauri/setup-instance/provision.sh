@@ -65,7 +65,7 @@ echo "npm : $(npm -v)"
 # -------------------------
 echo "Configuring OpenClaw Workspace Directories..."
 
-WORKSPACE_DIR="/home/ubuntu/clawset"
+WORKSPACE_DIR="${HOME}/clawset"
 CONFIG_DIR="$WORKSPACE_DIR/.openclaw"
 
 # Set for current script

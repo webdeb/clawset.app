@@ -320,6 +320,7 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // 1. Get VM-level info from instance provider
       const details: any = await invoke("instance_get", {
         providerId: activeProviderId,
         instanceId: name
@@ -339,38 +340,48 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
             ip: details.ip || inst.ip,
             status: details.status || inst.status,
             meta: details.meta || inst.meta,
-            nodeInstalled: details.node_installed || undefined,
-            openclawInstalled: details.openclaw_installed || false,
-            isProvisioning: details.is_provisioning || false,
           };
         }
         return inst;
       }));
 
-      // Fetch views + sync context for running instances
+      // 2. For running instances, get app-level info from agent app status script
       if (details.status === "Running" && (details.ip || currentInst?.ip)) {
-        await fetchInstanceViews(name, details.ip || currentInst?.ip || "");
-        await syncContext(name);
-      }
-
-      if (details.is_provisioning) {
         try {
-          const result: any = await invoke("instance_exec", {
+          const appStatus: any = await invoke("app_action", {
             providerId: activeProviderId,
             instanceId: name,
-            cmd: "cat /tmp/provision.log 2>/dev/null || echo ''"
+            appId: activeAppId,
+            action: "status",
           });
-          if (result?.stdout) {
-            setProvisionLogs(result.stdout.split('\n'));
-          }
+
+          let parsed: any = {};
+          try { parsed = JSON.parse(appStatus?.stdout || "{}"); } catch { /* */ }
+
+          setInstances(prev => prev.map(inst => {
+            if (inst.name === name) {
+              return {
+                ...inst,
+                nodeInstalled: parsed.node_installed || undefined,
+                openclawInstalled: parsed.openclaw_installed || false,
+                isProvisioning: parsed.is_provisioning || false,
+                openclawStatus: parsed.openclaw_status || {},
+              };
+            }
+            return inst;
+          }));
         } catch (e) {
-          console.error(`Error fetching provision logs for ${name}:`, e);
+          console.error(`Error fetching app status for ${name}:`, e);
         }
+
+        // Fetch views + sync context
+        await fetchInstanceViews(name, details.ip || currentInst?.ip || "");
+        await syncContext(name);
       }
     } catch (e: any) {
       console.error(`Error fetching details for ${name}:`, e);
     }
-  }, [instances, provisioningInstanceName, activeProviderId, fetchInstanceViews, syncContext]);
+  }, [instances, provisioningInstanceName, activeProviderId, activeAppId, fetchInstanceViews, syncContext]);
 
   const refreshInstances = useCallback(async () => {
     try {

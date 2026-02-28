@@ -19,10 +19,10 @@ scripts:
   update: scripts/install-ubuntu.sh
 
 config:
-  path: "/home/ubuntu/clawset/.openclaw/openclaw.json"
+  path: "${HOME}/clawset/.openclaw/openclaw.json"
 
 auth:
-  path: "/home/ubuntu/clawset/.openclaw/agents/main/agent/auth-profiles.json"
+  path: "${HOME}/clawset/.openclaw/agents/main/agent/auth-profiles.json"
 
 requires_auth:
   - openai-codex
