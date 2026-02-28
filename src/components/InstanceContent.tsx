@@ -1,13 +1,13 @@
 import { Card, Chip, Button, Spinner } from "@heroui/react";
 import { useRef, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { useMultipass } from "../context/MultipassContext";
+import { useClawset } from "../context/ClawsetContext";
 
 import { InstanceProvision } from "./InstanceProvision";
 import { InstanceOpenClawStatus } from "./InstanceOpenClawStatus";
 
 export function InstanceContent() {
-  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName, syncOpenclawStatus, syncAgentAuth } = useMultipass();
+  const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName, syncOpenclawStatus, syncAgentAuth } = useClawset();
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [isSyncingStatus, setIsSyncingStatus] = useState(false);
 
@@ -72,6 +72,10 @@ export function InstanceContent() {
     return <InstanceProvision />;
   }
 
+  const cpus = selectedInstance.resources?.cpus || selectedInstance.meta?.os || "Unknown";
+  const memory = selectedInstance.resources?.memory || "Unknown";
+  const storage = selectedInstance.resources?.storage || "Unknown";
+
   return (
     <div className="w-full min-h-full flex flex-col items-center bg-background text-foreground p-8">
       <Card className="p-6 w-full max-w-2xl flex flex-col gap-6">
@@ -82,7 +86,7 @@ export function InstanceContent() {
               {selectedInstance.status}
             </Chip>
           </h2>
-          <p className="text-default-500 text-sm">{selectedInstance.ubuntuVersion || "Ubuntu"}</p>
+          <p className="text-default-500 text-sm">{selectedInstance.meta?.os || "Ubuntu"}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -92,15 +96,15 @@ export function InstanceContent() {
           </div>
           <div className="flex flex-col gap-1 border border-default-200 rounded-lg p-3 bg-default-50/50">
             <span className="text-xs text-default-500 uppercase font-semibold tracking-wider">CPUs</span>
-            <span className="font-medium font-mono text-sm">{selectedInstance.cpus || "Unknown"}</span>
+            <span className="font-medium font-mono text-sm">{cpus}</span>
           </div>
           <div className="flex flex-col gap-1 border border-default-200 rounded-lg p-3 bg-default-50/50">
             <span className="text-xs text-default-500 uppercase font-semibold tracking-wider">Memory</span>
-            <span className="font-medium font-mono text-sm">{selectedInstance.memory || "Unknown"}</span>
+            <span className="font-medium font-mono text-sm">{memory}</span>
           </div>
           <div className="flex flex-col gap-1 border border-default-200 rounded-lg p-3 bg-default-50/50">
             <span className="text-xs text-default-500 uppercase font-semibold tracking-wider">Storage</span>
-            <span className="font-medium font-mono text-sm">{selectedInstance.storage || "Unknown"}</span>
+            <span className="font-medium font-mono text-sm">{storage}</span>
           </div>
         </div>
 

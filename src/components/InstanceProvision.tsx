@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Card, Button, Input, Slider } from "@heroui/react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { useMultipass } from "../context/MultipassContext";
+import { useClawset } from "../context/ClawsetContext";
 
 export function InstanceProvision() {
-  const { instances, installInstance, provisionLogs, hostResources } = useMultipass();
+  const { instances, installInstance, provisionLogs, hostResources } = useClawset();
   
   // Max limits (80% of host)
   const hostTotalRamGB = hostResources?.total_memory ? Math.floor(hostResources.total_memory / (1024 ** 3)) : 16;
@@ -78,7 +78,7 @@ export function InstanceProvision() {
             Provision New Environment
           </h2>
           <p className="text-default-500 text-sm">
-            Please configure the resources for your secure OpenClaw environment.
+            Please configure the resources for your secure agent environment.
           </p>
         </div>
 

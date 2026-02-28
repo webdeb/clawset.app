@@ -1,0 +1,38 @@
+type: agent-app
+id: openclaw
+name: OpenClaw
+version: "1.0.0"
+description: "Full-featured AI agent gateway with Node.js runtime"
+homepage: https://github.com/webdeb/clawset-openclaw
+
+platforms:
+  - os: ubuntu
+    arch: [amd64, arm64]
+  - os: debian
+    arch: [arm64]
+
+scripts:
+  install: scripts/install-ubuntu.sh
+  start: scripts/control.sh start
+  stop: scripts/control.sh stop
+  status: scripts/status.sh
+  update: scripts/install-ubuntu.sh
+
+config:
+  path: "/home/ubuntu/clawset/.openclaw/openclaw.json"
+
+auth:
+  path: "/home/ubuntu/clawset/.openclaw/agents/main/agent/auth-profiles.json"
+
+requires_auth:
+  - openai-codex
+
+views:
+  gateway:
+    name: "Gateway"
+    port: 18789
+    path: "/"
+
+provisioning:
+  check: "test -f /tmp/provisioning"
+  log: "/tmp/provision.log"

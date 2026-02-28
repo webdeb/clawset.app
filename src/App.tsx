@@ -1,24 +1,31 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { InstanceContent } from "./components/InstanceContent";
 import { ConfigContent } from "./components/ConfigContent";
 import { AppLayout } from "./components/AppLayout";
-import { DashboardContentRouteWrapper } from "./components/DashboardContent";
-import { AppHubContentRouteWrapper } from "./components/AppHubContent";
-import { MultipassProvider } from "./context/MultipassContext";
+import { ViewRouteWrapper } from "./components/ViewContent";
+import { PluginsContent } from "./components/PluginsContent";
+import { AuthContent } from "./components/AuthContent";
+import { ClawsetProvider } from "./context/ClawsetContext";
+
+function ViewRoute() {
+  const { viewId } = useParams<{ viewId: string }>();
+  return <ViewRouteWrapper viewId={viewId || ""} />;
+}
 
 function App() {
   return (
-    <MultipassProvider>
+    <ClawsetProvider>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/instance" replace />} />
+          <Route path="/view/:viewId" element={<ViewRoute />} />
           <Route path="/instance" element={<InstanceContent />} />
           <Route path="/config" element={<ConfigContent />} />
-          <Route path="/dashboard" element={<DashboardContentRouteWrapper />} />
-          <Route path="/apphub" element={<AppHubContentRouteWrapper />} />
+          <Route path="/plugins" element={<PluginsContent />} />
+          <Route path="/auth" element={<AuthContent />} />
         </Route>
       </Routes>
-    </MultipassProvider>
+    </ClawsetProvider>
   );
 }
 

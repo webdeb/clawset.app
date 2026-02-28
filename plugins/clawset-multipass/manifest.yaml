@@ -1,0 +1,26 @@
+type: instance-provider
+id: multipass
+name: Multipass
+version: "1.0.0"
+description: "Ubuntu VMs via Canonical Multipass"
+homepage: https://github.com/webdeb/clawset-multipass
+
+requirements:
+  binaries: [multipass]
+
+capabilities:
+  mount: true
+  transfer: true
+  shell: true
+
+scripts:
+  is_available: scripts/is_available.js
+  create: scripts/create.js
+  destroy: scripts/destroy.js
+  start: scripts/start.js
+  stop: scripts/stop.js
+  list: scripts/list.js
+  get: scripts/get.js
+  exec: scripts/exec.js
+  transfer: scripts/transfer.js
+  mount: scripts/mount.js

@@ -1,10 +1,9 @@
 import { Card, Chip, Button, Spinner } from "@heroui/react";
-import { useMultipass } from "../context/MultipassContext";
+import { useClawset } from "../context/ClawsetContext";
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: boolean }) {
-  const { selectedInstance, syncOpenclawStatus } = useMultipass();
+  const { selectedInstance, syncOpenclawStatus, appAction, writeInstanceFile } = useClawset();
   const [loadingAction, setLoadingAction] = useState<"start" | "stop" | "init" | "save" | null>(null);
   const [isEditingConfig, setIsEditingConfig] = useState(false);
   const [editedConfig, setEditedConfig] = useState("");
@@ -22,8 +21,7 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
   const handleStartStop = async (action: "start" | "stop") => {
     setLoadingAction(action);
     try {
-      const command = action === "start" ? "start_openclaw_daemon" : "stop_openclaw_daemon";
-      await invoke(command, { instanceName: selectedInstance.name });
+      await appAction(selectedInstance.name, action);
     } catch (e) {
       console.error(e);
     } finally {
@@ -37,6 +35,8 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
     crypto.getRandomValues(array);
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   };
+
+  const OPENCLAW_CONFIG_PATH = "/home/ubuntu/clawset/.openclaw/openclaw.json";
 
   const initDefaultConfig = async () => {
     setLoadingAction("init");
@@ -63,10 +63,11 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
         }
       };
 
-      await invoke("write_openclaw_config", {
-        instanceName: selectedInstance.name,
-        configJson: JSON.stringify(newConfig, null, 2)
-      });
+      await writeInstanceFile(
+        selectedInstance.name,
+        OPENCLAW_CONFIG_PATH,
+        JSON.stringify(newConfig, null, 2)
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -88,10 +89,11 @@ export function InstanceOpenClawStatus({ isSyncingStatus }: { isSyncingStatus?: 
     setSaveError("");
     try {
       JSON.parse(editedConfig); // Validate JSON format
-      await invoke("write_openclaw_config", {
-        instanceName: selectedInstance.name,
-        configJson: editedConfig
-      });
+      await writeInstanceFile(
+        selectedInstance.name,
+        OPENCLAW_CONFIG_PATH,
+        editedConfig
+      );
       setIsEditingConfig(false);
     } catch (e: any) {
       console.error(e);

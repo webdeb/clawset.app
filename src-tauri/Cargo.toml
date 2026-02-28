@@ -26,4 +26,7 @@ tauri-plugin-dialog = "2.6.0"
 sysinfo = "0.38.2"
 url = "2.5.8"
 tokio = { version = "1.49.0", features = ["sync"] }
+rquickjs = { version = "0.11", features = ["parallel"] }
+async-trait = "0.1"
+serde_yaml = "0.9"
 

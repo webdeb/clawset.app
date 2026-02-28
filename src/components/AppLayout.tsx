@@ -1,25 +1,25 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Button, Spinner, Select, ListBox, Tabs } from "@heroui/react";
-import { useMultipass } from "../context/MultipassContext";
+import { useClawset } from "../context/ClawsetContext";
 
 const navbarHeight = 60;
 
 export function AppLayout() {
   const { 
-    isMultipassInstalled, 
+    isProviderAvailable, 
     instances, 
     selectedInstance, 
     loading, 
     error, 
     setSelectedInstanceName, 
     startInstance 
-  } = useMultipass();
+  } = useClawset();
 
   const [actionLoading, setActionLoading] = useState(false);
 
   const openclawStatus = selectedInstance ? selectedInstance.status : "Unknown";
-
+  const views = selectedInstance?.views || [];
 
   const handleStartInstance = async () => {
     if (!selectedInstance) return;
@@ -39,6 +39,7 @@ export function AppLayout() {
     );
   }
 
+
   return (
     <div className="w-full h-screen flex flex-col bg-background text-foreground overflow-hidden">
       {/* Persistent Header */}
@@ -49,27 +50,39 @@ export function AppLayout() {
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
             <h1 className="text-lg font-bold leading-none">clawset.app</h1>
-            <p className="text-[10px] text-default-500">Secure OpenClaw Environment</p>
+            <p className="text-[10px] text-default-500">Secure Agent Environment</p>
           </div>
 
-          {!isMultipassInstalled ? (
+          {!isProviderAvailable ? (
              <div className="bg-danger/10 text-danger px-3 py-1 rounded text-xs font-semibold flex items-center">
-               Multipass missing
+               No Instance Provider
              </div>
           ) : (
             <Tabs className="max-h-8">
               <Tabs.ListContainer>
                 <Tabs.List className="gap-6 shadow-none p-0 border-b-0 bg-transparent h-8">
-                  <Tabs.Tab href="#dashboard" id="dashboard" isDisabled={openclawStatus !== "Running"}>Dashboard</Tabs.Tab>
-                  <Tabs.Tab href="#apphub" id="apphub" isDisabled={openclawStatus !== "Running"}>AppHub</Tabs.Tab>
+                  {/* Dynamic view tabs from .clawset/views.json */}
+                  {views.map((view) => (
+                    <Tabs.Tab 
+                      key={view.id} 
+                      href={`#view/${view.id}`} 
+                      id={view.id}
+                      isDisabled={openclawStatus !== "Running"}
+                    >
+                      {view.name}
+                    </Tabs.Tab>
+                  ))}
+                  {/* Static tabs */}
                   <Tabs.Tab href="#instance" id="instance">Instance</Tabs.Tab>
+                  <Tabs.Tab href="#plugins" id="plugins">Plugins</Tabs.Tab>
+                  <Tabs.Tab href="#auth" id="auth">Auth</Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>
           )}
         </div>
 
-        {isMultipassInstalled && (
+        {isProviderAvailable && (
           <div className="flex items-center gap-4">
             {instances.length === 0 && (
               <Button variant="ghost" size="sm" isPending={actionLoading} onPress={() => window.location.hash = "#/instance"} className="h-8 min-h-8 text-xs">
@@ -125,7 +138,7 @@ export function AppLayout() {
         )}
       </header>
       
-      {/* Dynamic Content rendered securely via Router Outlet */}
+      {/* Dynamic Content */}
       <main className="flex-1 w-full bg-transparent overflow-y-auto relative">
         <Outlet />
       </main>

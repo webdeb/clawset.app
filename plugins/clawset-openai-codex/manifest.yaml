@@ -1,0 +1,21 @@
+type: ai-provider
+id: openai-codex
+name: OpenAI Codex
+version: "1.0.0"
+description: "OpenAI API access for Codex agents"
+homepage: https://platform.openai.com
+
+auth_config:
+  method: oauth2_pkce
+  auth_url: "https://auth.openai.com/authorize"
+  token_url: "https://auth.openai.com/token"
+  client_id: "app_tHV9Uh5xMnT1T9G7juSL0KQJ"
+  redirect_uri: "http://localhost:1455/auth/callback"
+  scopes: ["openid", "profile"]
+  pkce: true
+
+models:
+  - id: codex-mini
+    name: "Codex Mini"
+    context_window: 192000
+    supports_tools: true

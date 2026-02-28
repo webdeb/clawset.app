@@ -1,8 +1,8 @@
 import { Card } from "@heroui/react";
-import { useMultipass } from "../context/MultipassContext";
+import { useClawset } from "../context/ClawsetContext";
 
 export function ConfigContent() {
-  const { instances, selectedInstance } = useMultipass();
+  const { instances, selectedInstance } = useClawset();
   const instance = instances.find(i => i.name === selectedInstance?.name);
   
   return (
