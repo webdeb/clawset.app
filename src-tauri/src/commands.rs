@@ -186,6 +186,63 @@ pub async fn instance_exec(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn instance_poll(
+    app: tauri::AppHandle,
+    state: State<'_, PluginState>,
+    provider_id: &str,
+    instance_id: &str,
+    app_id: &str,
+) -> Result<serde_json::Value, String> {
+    let pm = state.manager.lock().map_err(|e| e.to_string())?;
+    
+    let (provider_path, provider_manifest) = pm.get_plugin(provider_id)
+        .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
+
+    let (app_path, app_manifest) = pm.get_plugin(app_id)
+        .ok_or_else(|| format!("Agent app '{}' not found", app_id))?;
+
+    // 1. Get instance details (instance_get)
+    let mut get_env = HashMap::new();
+    get_env.insert("INSTANCE_ID".to_string(), instance_id.to_string());
+    
+    let details = ScriptRunner::run_provider_script(
+        &pm, &provider_path, &provider_manifest, "get", &get_env, Some(&app), None
+    ).unwrap_or_else(|_| serde_json::json!({ "status": "Unknown" }));
+
+    // If it's not running, we skip app status and views
+    let is_running = details.get("status").and_then(|s| s.as_str()) == Some("Running");
+    
+    let mut app_status = serde_json::json!({});
+    let mut views_output = serde_json::json!({});
+
+    if is_running {
+        // 2. Get app status (app_action "status")
+        app_status = ScriptRunner::run_agent_script(
+            &pm, &provider_path, &provider_manifest,
+            instance_id,
+            &app_path, &app_manifest,
+            "status",
+            Some(&app), None,
+        ).unwrap_or_else(|_| serde_json::json!({}));
+
+        // 3. Get views (instance_exec "cat .clawset/views.json")
+        let mut exec_env = HashMap::new();
+        exec_env.insert("INSTANCE_ID".to_string(), instance_id.to_string());
+        exec_env.insert("CMD".to_string(), "cat ~/.clawset/views.json 2>/dev/null || echo '{\"views\":[]}'".to_string());
+        
+        views_output = ScriptRunner::run_provider_script(
+            &pm, &provider_path, &provider_manifest, "exec", &exec_env, Some(&app), None
+        ).unwrap_or_else(|_| serde_json::json!({ "stdout": "{\"views\":[]}" }));
+    }
+
+    Ok(serde_json::json!({
+        "details": details,
+        "app_status": app_status,
+        "views_output": views_output,
+    }))
+}
+
 // ─── Agent App Commands ─────────────────────────────────────
 
 #[tauri::command]

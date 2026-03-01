@@ -1,31 +1,40 @@
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { InstanceContent } from "./components/InstanceContent";
-import { ConfigContent } from "./components/ConfigContent";
 import { AppLayout } from "./components/AppLayout";
 import { ViewRouteWrapper } from "./components/ViewContent";
 import { PluginsContent } from "./components/PluginsContent";
 import { AuthContent } from "./components/AuthContent";
 import { ClawsetProvider } from "./context/ClawsetContext";
 
-function ViewRoute() {
-  const { viewId } = useParams<{ viewId: string }>();
+const queryClient = new QueryClient();
+
+function InstanceViewRoute() {
+  const { viewId } = useParams<{ instanceName: string; viewId: string }>();
   return <ViewRouteWrapper viewId={viewId || ""} />;
 }
 
 function App() {
   return (
-    <ClawsetProvider>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/instance" replace />} />
-          <Route path="/view/:viewId" element={<ViewRoute />} />
-          <Route path="/instance" element={<InstanceContent />} />
-          <Route path="/config" element={<ConfigContent />} />
-          <Route path="/plugins" element={<PluginsContent />} />
-          <Route path="/auth" element={<AuthContent />} />
-        </Route>
-      </Routes>
-    </ClawsetProvider>
+    <QueryClientProvider client={queryClient}>
+      <ClawsetProvider>
+        <Routes>
+          <Route element={<AppLayout />}>
+            {/* Default redirect */}
+            <Route path="/" element={<Navigate to="/system/plugins" replace />} />
+
+            {/* System context */}
+            <Route path="/system" element={<Navigate to="/system/plugins" replace />} />
+            <Route path="/system/plugins" element={<PluginsContent />} />
+            <Route path="/system/auth" element={<AuthContent />} />
+
+            {/* Instance context */}
+            <Route path="/instance/:instanceName" element={<InstanceContent />} />
+            <Route path="/instance/:instanceName/:viewId" element={<InstanceViewRoute />} />
+          </Route>
+        </Routes>
+      </ClawsetProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -97,6 +97,7 @@ pub fn run() {
             commands::instance_start,
             commands::instance_stop,
             commands::instance_exec,
+            commands::instance_poll,
             // Agent app
             commands::app_install,
             commands::app_action,

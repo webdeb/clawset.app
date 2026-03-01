@@ -1,36 +1,74 @@
-import { useState } from "react";
-import { Outlet } from "react-router-dom";
-import { Button, Spinner, Select, ListBox, Tabs } from "@heroui/react";
+import { useState, useEffect } from "react";
+import { Outlet, useNavigate, useLocation, matchPath } from "react-router-dom";
+import { Button, Spinner, Tabs } from "@heroui/react";
 import { useClawset } from "../context/ClawsetContext";
+import { WebviewLayoutProvider } from "../context/WebviewLayoutContext";
+import { ContextChat } from "./ContextChat";
 
-const navbarHeight = 60;
+const HEADER_HEIGHT = 48;
+
+/**
+ * Derive context from URL:
+ *  /system/*               → { type: "system" }
+ *  /instance/:name/*       → { type: "instance", name }
+ */
+function useRouteContext() {
+  const location = useLocation();
+
+  const instanceMatch = matchPath("/instance/:instanceName/*", location.pathname);
+  if (instanceMatch) {
+    return { type: "instance" as const, instanceName: instanceMatch.params.instanceName! };
+  }
+
+  return { type: "system" as const, instanceName: null };
+}
 
 export function AppLayout() {
-  const { 
-    isProviderAvailable, 
-    instances, 
-    selectedInstance, 
-    loading, 
-    error, 
-    setSelectedInstanceName, 
-    startInstance 
+  const {
+    isProviderAvailable,
+    instances,
+    loading,
+    error,
+    startInstance,
+    setSelectedInstanceName,
+    setActiveContext,
   } = useClawset();
 
+  const navigate = useNavigate();
+  const location = useLocation();
+  const routeContext = useRouteContext();
   const [actionLoading, setActionLoading] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
 
-  const openclawStatus = selectedInstance ? selectedInstance.status : "Unknown";
-  const views = selectedInstance?.views || [];
+  const isSystem = routeContext.type === "system";
+  const contextInstance = isSystem ? null : instances.find((i) => i.name === routeContext.instanceName);
+  const openclawStatus = contextInstance?.status || "Unknown";
+  const views = contextInstance?.views || [];
+
+  // ─── Webview Layout State ─────────────────────────────────────
+  // Managed entirely inside WebviewLayoutProvider now.
+
+  // Sync context state from URL (URL = source of truth)
+  useEffect(() => {
+    if (isSystem) {
+      setActiveContext("system");
+    } else if (routeContext.instanceName) {
+      setActiveContext(routeContext.instanceName);
+      setSelectedInstanceName(routeContext.instanceName);
+    }
+  }, [isSystem, routeContext.instanceName, setActiveContext, setSelectedInstanceName]);
 
   const handleStartInstance = async () => {
-    if (!selectedInstance) return;
+    if (!contextInstance) return;
     setActionLoading(true);
     try {
-      await startInstance(selectedInstance.name);
+      await startInstance(contextInstance.name);
     } finally {
       setActionLoading(false);
     }
   };
 
+  // ─── Loading state ──────────────────────────────────────────
   if (loading && instances.length === 0 && !actionLoading) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-background text-foreground">
@@ -39,109 +77,149 @@ export function AppLayout() {
     );
   }
 
+  // ─── Tab config ─────────────────────────────────────────────
+  const systemTabs = [
+    { id: "plugins", label: "Plugins", path: "/system/plugins" },
+    { id: "auth", label: "Auth", path: "/system/auth" },
+  ];
 
+  const getActiveTab = (): string => {
+    if (isSystem) {
+      const found = systemTabs.find((t) => location.pathname === t.path);
+      return found?.id || "plugins";
+    }
+    // Instance context: /instance/:name → "overview", /instance/:name/:viewId → viewId
+    const parts = location.pathname.split("/");
+    // /instance/name/viewId → parts = ["", "instance", "name", "viewId"]
+    return parts[3] || "overview";
+  };
+
+  const handleTabChange = (tabId: string) => {
+    if (isSystem) {
+      const tab = systemTabs.find((t) => t.id === tabId);
+      if (tab) navigate(tab.path);
+    } else {
+      if (tabId === "overview") {
+        navigate(`/instance/${routeContext.instanceName}`);
+      } else {
+        navigate(`/instance/${routeContext.instanceName}/${tabId}`);
+      }
+    }
+  };
+
+  // ─── Render ─────────────────────────────────────────────────
   return (
     <div className="w-full h-screen flex flex-col bg-background text-foreground overflow-hidden">
-      {/* Persistent Header */}
-      <header 
-        className="flex flex-row items-center justify-between flex-shrink-0 w-full bg-default-50 border-b border-divider px-6 z-50 relative"
-        style={{ height: navbarHeight }}
+      {/* Header */}
+      <header
+        className="flex flex-row items-center justify-between flex-shrink-0 w-full bg-default-50 border-b border-divider px-4 z-50 relative"
+        style={{ height: HEADER_HEIGHT }}
       >
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col">
-            <h1 className="text-lg font-bold leading-none">clawset.app</h1>
-            <p className="text-[10px] text-default-500">Secure Agent Environment</p>
+        {/* Left: Context name */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold ${isSystem ? "bg-default-200 text-default-600" : "bg-primary/10 text-primary"}`}>
+              {isSystem ? "⚙" : (routeContext.instanceName || "").slice(0, 2).toUpperCase()}
+            </span>
+            <h1 className="text-sm font-semibold leading-none">
+              {isSystem ? "System" : routeContext.instanceName}
+            </h1>
           </div>
+        </div>
 
-          {!isProviderAvailable ? (
-             <div className="bg-danger/10 text-danger px-3 py-1 rounded text-xs font-semibold flex items-center">
-               No Instance Provider
-             </div>
-          ) : (
-            <Tabs className="max-h-8">
+        {/* Center: Context-dependent tabs */}
+        <div className="flex-1 flex items-center justify-center">
+          {isProviderAvailable && (
+            <Tabs className="max-h-8" selectedKey={getActiveTab()} onSelectionChange={(key) => handleTabChange(key as string)}>
               <Tabs.ListContainer>
-                <Tabs.List className="gap-6 shadow-none p-0 border-b-0 bg-transparent h-8">
-                  {/* Dynamic view tabs from .clawset/views.json */}
-                  {views.map((view) => (
-                    <Tabs.Tab 
-                      key={view.id} 
-                      href={`#view/${view.id}`} 
-                      id={view.id}
-                      isDisabled={openclawStatus !== "Running"}
-                    >
-                      {view.name}
-                    </Tabs.Tab>
-                  ))}
-                  {/* Static tabs */}
-                  <Tabs.Tab href="#instance" id="instance">Instance</Tabs.Tab>
-                  <Tabs.Tab href="#plugins" id="plugins">Plugins</Tabs.Tab>
-                  <Tabs.Tab href="#auth" id="auth">Auth</Tabs.Tab>
+                <Tabs.List className="gap-4 shadow-none p-0 border-b-0 bg-transparent h-8">
+                  {isSystem ? (
+                    <>
+                      {systemTabs.map((tab) => (
+                        <Tabs.Tab key={tab.id} id={tab.id}>
+                          {tab.label}
+                        </Tabs.Tab>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <Tabs.Tab key="overview" id="overview">
+                        Instance
+                      </Tabs.Tab>
+                      {views.map((view) => (
+                        <Tabs.Tab
+                          key={view.id}
+                          id={view.id}
+                          isDisabled={openclawStatus !== "Running"}
+                        >
+                          {view.name}
+                        </Tabs.Tab>
+                      ))}
+                    </>
+                  )}
                 </Tabs.List>
               </Tabs.ListContainer>
             </Tabs>
           )}
         </div>
 
-        {isProviderAvailable && (
-          <div className="flex items-center gap-4">
-            {instances.length === 0 && (
-              <Button variant="ghost" size="sm" isPending={actionLoading} onPress={() => window.location.hash = "#/instance"} className="h-8 min-h-8 text-xs">
-                Install Default Instance
-              </Button>
-            )}
-            {openclawStatus === "Stopped" && (
-              <Button variant="ghost" size="sm" isPending={actionLoading} onPress={handleStartInstance} className="h-8 min-h-8 text-xs bg-primary/10 text-primary">
-                Start Instance
-              </Button>
-            )}
-
-            {instances.length > 0 && selectedInstance && (
-              <Select 
-                value={selectedInstance.name}
-                onChange={(key) => {
-                  if (key && typeof key === "string") setSelectedInstanceName(key);
-                }}
-                className="w-40"
-                aria-label="Select Instance"
-                placeholder="Select Instance"
-              >
-                <Select.Trigger className="rounded bg-default-100 border text-left h-8 min-h-8">
-                  <Select.Value />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {instances.map((i) => (
-                      <ListBox.Item key={i.name} id={i.name} textValue={i.name}>
-                        {i.name}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            )}
-
-            <div className="flex flex-col items-end justify-center w-20">
-               <span className="text-[9px] text-default-500 uppercase font-bold tracking-wider leading-none mb-1">Status</span>
-               <span className="font-bold flex items-center gap-1.5 text-xs leading-none">
-                 {openclawStatus === "Running" && <span className="w-2 h-2 rounded-full bg-success"></span>}
-                 {openclawStatus === "Stopped" && <span className="w-2 h-2 rounded-full bg-danger"></span>}
-                 {actionLoading ? <Spinner size="sm"/> : (!selectedInstance ? "No Instance" : openclawStatus === "Running" ? "Running" : openclawStatus === "Stopped" ? "Stopped" : openclawStatus)}
-               </span>
+        {/* Right: Status + Actions */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {!isProviderAvailable && (
+            <div className="bg-danger/10 text-danger px-3 py-1 rounded text-xs font-semibold flex items-center">
+              No Provider
             </div>
-            
-            {error && (
-              <div className="absolute top-16 right-4 text-danger text-xs bg-default-50 px-2 py-1 rounded shadow-sm border border-danger/20">
-                Error: {error}
+          )}
+
+          {isProviderAvailable && !isSystem && contextInstance && (
+            <>
+              {openclawStatus === "Stopped" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isPending={actionLoading}
+                  onPress={handleStartInstance}
+                  className="h-7 min-h-7 text-[11px] bg-primary/10 text-primary"
+                >
+                  Start
+                </Button>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                {openclawStatus === "Running" && <span className="w-2 h-2 rounded-full bg-success" />}
+                {openclawStatus === "Stopped" && <span className="w-2 h-2 rounded-full bg-danger" />}
+                <span className="text-[11px] font-medium text-default-500">
+                  {actionLoading ? <Spinner size="sm" /> : openclawStatus}
+                </span>
               </div>
-            )}
-          </div>
-        )}
+            </>
+          )}
+
+          {error && (
+            <div className="text-danger text-[10px] bg-danger/10 px-2 py-0.5 rounded">
+              {error}
+            </div>
+          )}
+        </div>
       </header>
-      
-      {/* Dynamic Content */}
-      <main className="flex-1 w-full bg-transparent overflow-y-auto relative">
-        <Outlet />
-      </main>
+
+      {/* Main: Chat + Content */}
+      <WebviewLayoutProvider>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left: ContextChat */}
+          <ContextChat
+            collapsed={chatCollapsed}
+            onToggle={() => setChatCollapsed(!chatCollapsed)}
+          />
+
+          {/* Right: Tab Content */}
+          <main className="flex-1 bg-transparent overflow-hidden relative">
+            <div className="absolute inset-0">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+      </WebviewLayoutProvider>
     </div>
   );
 }

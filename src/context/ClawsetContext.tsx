@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { createAuthorizationFlow, exchangeAuthorizationCode } from "../lib/login-codex";
+import { useQueryClient } from "@tanstack/react-query";
+import { 
+  useInstances, 
+  useInstancePoll, 
+  usePlugins, 
+  useAuthStatus, 
+  useHostResources,
+  QUERY_KEYS
+} from "../lib/queries";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -74,6 +83,10 @@ interface ClawsetContextType {
   activeAppId: string;
   plugins: PluginInfo[];
 
+  // UI context: "system" or an instance name
+  activeContext: string;
+  setActiveContext: (ctx: string) => void;
+
   // Instance state
   instances: ClawsetInstance[];
   selectedInstanceName: string | null;
@@ -116,382 +129,159 @@ const DEFAULT_PROVIDER = "multipass";
 const DEFAULT_APP = "openclaw";
 
 const CLAWSET_DIR = "$HOME/clawset/.clawset";
-const VIEWS_FILE = `${CLAWSET_DIR}/views.json`;
-const CONTEXT_FILE = `${CLAWSET_DIR}/context.json`;
 
 export function ClawsetProvider({ children }: { children: ReactNode }) {
-  const [isProviderAvailable, setIsProviderAvailable] = useState(true);
-  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const queryClient = useQueryClient();
   const [provisioningInstanceName, setProvisioningInstanceName] = useState<string | null>(null);
-  const [instances, setInstances] = useState<ClawsetInstance[]>([]);
-  const [selectedInstanceName, setSelectedInstanceName] = useState<string | null>(null);
-  const [hostResources, setHostResources] = useState<HostResources | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedInstanceName, setSelectedInstanceName] = useState<string | null>(() => {
+    return localStorage.getItem(PREFERRED_INSTANCE_KEY);
+  });
   const [provisionLogs, setProvisionLogs] = useState<string[]>([]);
-  const [authProviders, setAuthProviders] = useState<AuthProviderInfo[]>([]);
-  const [authStatus, setAuthStatus] = useState<Record<string, boolean>>({});
   const [oauthPkceState, setOauthPkceState] = useState<Record<string, { verifier: string; state: string }>>({});
+  const [activeContext, setActiveContextRaw] = useState<string>("system");
 
   const activeProviderId = DEFAULT_PROVIDER;
   const activeAppId = DEFAULT_APP;
-  const selectedInstance = instances.find(inst => inst.name === selectedInstanceName) || null;
 
-  // ─── Bootstrap ─────────────────────────────────────────────
+  // ─── Queries ───────────────────────────────────────────────
 
-  useEffect(() => {
-    const fetchResources = async () => {
-      try {
-        const res: HostResources = await invoke("get_host_resources");
-        setHostResources(res);
-      } catch (e) {
-        console.error("Failed to fetch host resources:", e);
+  const { data: hostResources = null } = useHostResources();
+  const { data: plugins = [], refetch: refreshPluginsQuery } = usePlugins();
+  const { data: authStatus = {}, refetch: refreshAuthStatusQuery } = useAuthStatus();
+  
+  // Calculate isAnyProvisioning to speed up polling during install
+  const isAnyProvisioning = provisioningInstanceName !== null;
+  
+  const { 
+    data: baseInstances = [], 
+    isLoading: instancesLoading,
+    error: instancesError,
+    refetch: refreshInstancesQuery,
+    isSuccess: isProviderAvailable
+  } = useInstances(activeProviderId, isAnyProvisioning);
+
+  const { data: pollData } = useInstancePoll(
+    activeProviderId, 
+    selectedInstanceName, 
+    activeAppId, 
+    isAnyProvisioning
+  );
+
+  // ─── Computed State ────────────────────────────────────────
+
+  const authProviders = plugins
+    .filter(p => p.type === "ai-provider")
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      method: "oauth2_pkce", // TODO: read from manifest
+    }));
+
+  // Combine base instances with polled details for the selected instance
+  const instances = baseInstances.map(inst => {
+    if (inst.name === selectedInstanceName && pollData) {
+      const details = pollData.details;
+      const appStatus = pollData.appStatus;
+      
+      const hostMount = details.mounts ? Object.values(details.mounts)[0] as string : undefined;
+      
+      let finalViews = pollData.views;
+      // If no views from instance, fall back to manifest defaults
+      if (finalViews.length === 0) {
+        // Note: we'd need a separate fetch for plugin_get_manifest if we wanted to dynamically 
+        // fall back here, but for now we hardcode the fallback to match previous behavior
+        finalViews = [{ id: "gateway", name: "Gateway", port: 18789, path: "/" }];
       }
-    };
-    fetchResources();
 
+      return {
+        ...inst,
+        resources: details.resources || {},
+        mounts: details.mounts || {},
+        hostPathFolder: hostMount || undefined,
+        ip: details.ip || inst.ip,
+        status: details.status || inst.status,
+        meta: details.meta || inst.meta,
+        nodeInstalled: appStatus.node_installed || undefined,
+        openclawInstalled: appStatus.openclaw_installed || false,
+        isProvisioning: appStatus.is_provisioning || false,
+        openclawStatus: appStatus.openclaw_status || {},
+        views: finalViews,
+      };
+    }
+    return inst;
+  });
+
+  const selectedInstance = instances.find(inst => inst.name === selectedInstanceName) || null;
+  const loading = instancesLoading;
+  const error = instancesError ? (instancesError as Error).toString() : null;
+
+  // When switching context to an instance, auto-sync selectedInstance
+  const setActiveContext = useCallback((ctx: string) => {
+    setActiveContextRaw(ctx);
+    if (ctx !== "system") {
+      setSelectedInstanceName(ctx);
+      localStorage.setItem(PREFERRED_INSTANCE_KEY, ctx);
+    }
+  }, []);
+
+  // Set default selection if none selected and instances arrive
+  useEffect(() => {
+    if (baseInstances.length > 0 && !selectedInstanceName) {
+      const first = baseInstances[0].name;
+      setSelectedInstanceName(first);
+      localStorage.setItem(PREFERRED_INSTANCE_KEY, first);
+    }
+  }, [baseInstances, selectedInstanceName]);
+
+  // Provisioning log listener
+  useEffect(() => {
     const unlisten = listen<string>("provision-log", (event) => {
       setProvisionLogs(prev => [...prev, event.payload]);
     });
-
     return () => {
       unlisten.then(f => f());
     };
   }, []);
 
-  // ─── Plugin discovery + auth providers ─────────────────────
-
-  const refreshPlugins = useCallback(async () => {
-    try {
-      const result: PluginInfo[] = await invoke("plugin_list");
-      const list = Array.isArray(result) ? result : [];
-      setPlugins(list);
-
-      // Extract auth providers from ai-provider plugins
-      const aiProviders = list.filter(p => p.type === "ai-provider");
-      const providers: AuthProviderInfo[] = aiProviders.map(p => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        method: "oauth2_pkce", // TODO: read from manifest auth_config.method
-        placeholder: undefined,
-        docsUrl: undefined,
-      }));
-      setAuthProviders(providers);
-
-      // Check which providers have stored credentials
-      await refreshAuthStatus();
-    } catch (e) {
-      console.error("Failed to list plugins:", e);
-      setPlugins([]);
-    }
-  }, []);
-
-  const refreshAuthStatus = useCallback(async () => {
-    try {
-      const result: Record<string, boolean> = await invoke("auth_list_providers");
-      setAuthStatus(result || {});
-    } catch (e) {
-      // auth_list_providers might not be implemented yet — that's OK
-      console.error("Failed to check auth status:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshPlugins();
-  }, [refreshPlugins]);
-
-  // ─── Views polling ─────────────────────────────────────────
-
-  const fetchInstanceViews = useCallback(async (name: string, _ip: string) => {
-    try {
-      // Read .clawset/views.json from inside the instance
-      const result: any = await invoke("instance_exec", {
-        providerId: activeProviderId,
-        instanceId: name,
-        cmd: `cat ${VIEWS_FILE} 2>/dev/null || echo '{"views":[]}'`
-      });
-
-      let views: InstanceView[] = [];
-      try {
-        const parsed = JSON.parse(result?.stdout || '{"views":[]}');
-        views = (parsed.views || []).map((v: any) => ({
-          id: v.id,
-          name: v.name,
-          port: v.port,
-          path: v.path || "/",
-          status: v.status,
-        }));
-      } catch { /* ignore parse errors */ }
-
-      // If no views from instance, fall back to manifest defaults
-      if (views.length === 0) {
-        // Get views from the agent app manifest
-        const agentPlugin = plugins.find(p => p.id === activeAppId);
-        if (agentPlugin) {
-          try {
-            const manifest: any = await invoke("plugin_get_manifest", { id: activeAppId });
-            if (manifest?.views) {
-              views = Object.entries(manifest.views).map(([key, spec]: [string, any]) => ({
-                id: key,
-                name: spec.name || key,
-                port: spec.port,
-                path: spec.path || "/",
-              }));
-            }
-          } catch {
-            // plugin_get_manifest might not exist yet — use hardcoded fallback
-            views = [{ id: "gateway", name: "Gateway", port: 18789, path: "/" }];
-          }
-        }
-      }
-
-      setInstances(prev => prev.map(inst =>
-        inst.name === name ? { ...inst, views } : inst
-      ));
-    } catch (e) {
-      console.error(`Error fetching views for ${name}:`, e);
-    }
-  }, [activeProviderId, activeAppId, plugins]);
-
-  // ─── Context sync (clawset → agent) ────────────────────────
-
-  const syncContext = useCallback(async (name: string) => {
-    try {
-      const thisInstance = instances.find(i => i.name === name);
-      if (!thisInstance || thisInstance.status !== "Running") return;
-
-      const contextData = {
-        orchestrator: "clawset",
-        instance: {
-          id: thisInstance.id,
-          ip: thisInstance.ip,
-          provider: thisInstance.provider,
-        },
-        peers: instances
-          .filter(i => i.name !== name && i.status === "Running")
-          .map(i => ({
-            id: i.id,
-            ip: i.ip,
-            provider: i.provider,
-            apps: [], // TODO: track installed apps per instance
-          })),
-        auth: {
-          available: Object.entries(authStatus).filter(([, v]) => v).map(([k]) => k),
-          missing: authProviders.filter(p => !authStatus[p.id]).map(p => p.id),
-        },
-      };
-
-      await invoke("instance_exec", {
-        providerId: activeProviderId,
-        instanceId: name,
-        cmd: `mkdir -p ${CLAWSET_DIR} && cat > ${CONTEXT_FILE} << 'CLAWSET_EOF'\n${JSON.stringify(contextData, null, 2)}\nCLAWSET_EOF`
-      });
-    } catch (e) {
-      console.error(`Failed to sync context for ${name}:`, e);
-    }
-  }, [instances, authStatus, authProviders, activeProviderId]);
-
-  // ─── Instance list + details ───────────────────────────────
-
-  const fetchInstanceDetails = useCallback(async (name: string) => {
-    try {
-      const currentInst = instances.find(inst => inst.name === name);
-      const isCurrentlyProvisioning = provisioningInstanceName === name || currentInst?.isProvisioning;
-
-      if (isCurrentlyProvisioning) {
-        try {
-          const result: any = await invoke("instance_exec", {
-            providerId: activeProviderId,
-            instanceId: name,
-            cmd: "cat /tmp/provision.log 2>/dev/null || echo ''"
-          });
-          if (result?.stdout) {
-            setProvisionLogs(result.stdout.split('\n'));
-            if (result.stdout.includes("==> Provisioning Complete")) {
-              setInstances(prev => prev.map(inst =>
-                inst.name === name ? { ...inst, isProvisioning: false } : inst
-              ));
-            }
-          }
-        } catch (e) {
-          console.error(`Error fetching provision logs for ${name}:`, e);
-        }
-        return;
-      }
-
-      // 1. Get VM-level info from instance provider
-      const details: any = await invoke("instance_get", {
-        providerId: activeProviderId,
-        instanceId: name
-      });
-
-      if (!details) return;
-
-      const hostMount = details.mounts ? Object.values(details.mounts)[0] as string : undefined;
-
-      setInstances(prev => prev.map(inst => {
-        if (inst.name === name) {
-          return {
-            ...inst,
-            resources: details.resources || {},
-            mounts: details.mounts || {},
-            hostPathFolder: hostMount || undefined,
-            ip: details.ip || inst.ip,
-            status: details.status || inst.status,
-            meta: details.meta || inst.meta,
-          };
-        }
-        return inst;
-      }));
-
-      // 2. For running instances, get app-level info from agent app status script
-      if (details.status === "Running" && (details.ip || currentInst?.ip)) {
-        try {
-          const appStatus: any = await invoke("app_action", {
-            providerId: activeProviderId,
-            instanceId: name,
-            appId: activeAppId,
-            action: "status",
-          });
-
-          let parsed: any = {};
-          try { parsed = JSON.parse(appStatus?.stdout || "{}"); } catch { /* */ }
-
-          setInstances(prev => prev.map(inst => {
-            if (inst.name === name) {
-              return {
-                ...inst,
-                nodeInstalled: parsed.node_installed || undefined,
-                openclawInstalled: parsed.openclaw_installed || false,
-                isProvisioning: parsed.is_provisioning || false,
-                openclawStatus: parsed.openclaw_status || {},
-              };
-            }
-            return inst;
-          }));
-        } catch (e) {
-          console.error(`Error fetching app status for ${name}:`, e);
-        }
-
-        // Fetch views + sync context
-        await fetchInstanceViews(name, details.ip || currentInst?.ip || "");
-        await syncContext(name);
-      }
-    } catch (e: any) {
-      console.error(`Error fetching details for ${name}:`, e);
-    }
-  }, [instances, provisioningInstanceName, activeProviderId, activeAppId, fetchInstanceViews, syncContext]);
+  // ─── Dummy callbacks for backwards compatibility ───────────
+  // These are replaced by automatic TanStack Query backgrounds refetches, 
+  // but kept in the context value so we don't need to change all components yet.
 
   const refreshInstances = useCallback(async () => {
-    try {
-      const res: any = await invoke("instance_list", {
-        providerId: activeProviderId
-      });
+    await refreshInstancesQuery();
+  }, [refreshInstancesQuery]);
 
-      setIsProviderAvailable(true);
-      const instanceList = Array.isArray(res) ? res : [];
-
-      setInstances(prev => {
-        return instanceList.map((inst: any) => {
-          const existing = prev.find(p => p.name === inst.name);
-          return {
-            ...existing,
-            id: inst.id || inst.name,
-            name: inst.name,
-            ip: inst.ip || "",
-            status: inst.status || "Unknown",
-            provider: inst.provider || activeProviderId,
-            meta: inst.meta || { os: "Ubuntu" },
-          } as ClawsetInstance;
-        });
-      });
-
-      if (instanceList.length > 0) {
-        setSelectedInstanceName(currentSelected => {
-          const storedPreference = localStorage.getItem(PREFERRED_INSTANCE_KEY);
-          if (currentSelected && instanceList.find((r: any) => r.name === currentSelected)) {
-            return currentSelected;
-          }
-          if (storedPreference && instanceList.find((r: any) => r.name === storedPreference)) {
-            return storedPreference;
-          }
-          return instanceList[0].name;
-        });
-      } else {
-        setSelectedInstanceName(null);
-      }
-    } catch (e: any) {
-      setIsProviderAvailable(false);
-      setError(e.toString());
-    } finally {
-      if (loading) setLoading(false);
-    }
-  }, [activeProviderId, loading]);
-
-  // ─── Polling ───────────────────────────────────────────────
-
-  const isAnyProvisioning = provisioningInstanceName !== null || instances.some(inst => inst.isProvisioning);
-
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    let isMounted = true;
-
-    const runPoll = async () => {
-      if (!isMounted) return;
-
-      if (!isAnyProvisioning) {
-        await refreshInstances();
-      }
-      if (selectedInstanceName) {
-        await fetchInstanceDetails(selectedInstanceName);
-      }
-
-      if (isMounted) {
-        const intervalTime = isAnyProvisioning ? 2000 : 10000;
-        timeoutId = setTimeout(runPoll, intervalTime);
-      }
-    };
-
-    runPoll();
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, [selectedInstanceName, isAnyProvisioning]);
-
-  // ─── Instance actions ──────────────────────────────────────
+  const refreshPlugins = useCallback(async () => {
+    await refreshPluginsQuery();
+    await refreshAuthStatusQuery();
+  }, [refreshPluginsQuery, refreshAuthStatusQuery]);
 
   const handleSetSelectedInstance = useCallback((name: string) => {
     setSelectedInstanceName(name);
     localStorage.setItem(PREFERRED_INSTANCE_KEY, name);
-    fetchInstanceDetails(name);
-  }, [fetchInstanceDetails]);
+  }, []);
 
   const installInstance = useCallback(async (name: string, memory: string, cpus: string, disk: string) => {
     setProvisioningInstanceName(name);
-    setLoading(true);
     setProvisionLogs([]);
     try {
       await invoke("instance_create", {
         providerId: activeProviderId,
         params: { name, memory, cpus, disk }
       });
-      await refreshInstances();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(activeProviderId) });
       handleSetSelectedInstance(name);
     } catch (error: any) {
       setProvisionLogs(prev => [...prev, `ERROR: ${error}`]);
       throw error;
     } finally {
-      setLoading(false);
       setProvisioningInstanceName(null);
     }
-  }, [activeProviderId, refreshInstances, handleSetSelectedInstance]);
+  }, [activeProviderId, handleSetSelectedInstance, queryClient]);
 
   const provisionInstance = useCallback(async (name: string, _hostPath: string) => {
     setProvisioningInstanceName(name);
-    setLoading(true);
     setProvisionLogs([]);
     try {
       await invoke("app_install", {
@@ -499,29 +289,29 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
         instanceId: name,
         appId: activeAppId,
       });
-      await refreshInstances();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(activeProviderId) });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCE_POLL(activeProviderId, name) });
       handleSetSelectedInstance(name);
     } catch (error: any) {
       setProvisionLogs(prev => [...prev, `ERROR: ${error}`]);
       throw error;
     } finally {
-      setLoading(false);
       setProvisioningInstanceName(null);
     }
-  }, [activeProviderId, activeAppId, refreshInstances, handleSetSelectedInstance]);
+  }, [activeProviderId, activeAppId, handleSetSelectedInstance, queryClient]);
 
   const startInstance = useCallback(async (name: string) => {
-    setLoading(true);
     try {
       await invoke("instance_start", {
         providerId: activeProviderId,
         instanceId: name
       });
-      await refreshInstances();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(activeProviderId) });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCE_POLL(activeProviderId, name) });
     } finally {
-      setLoading(false);
+      // Done
     }
-  }, [activeProviderId, refreshInstances]);
+  }, [activeProviderId, queryClient]);
 
   const syncOpenclawStatus = useCallback(async (name: string) => {
     try {
@@ -543,13 +333,22 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
       try { status = JSON.parse(statusResult?.stdout || "{}"); } catch { /* */ }
       try { config = JSON.parse(configResult?.stdout || "{}"); } catch { /* */ }
 
-      setInstances(prev => prev.map(inst =>
-        inst.name === name ? { ...inst, openclawStatus: status, openclawConfig: config } : inst
-      ));
+      // Update poll cache so UI reflects immediately
+      queryClient.setQueryData(QUERY_KEYS.INSTANCE_POLL(activeProviderId, name), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          appStatus: {
+            ...old.appStatus,
+            openclaw_status: status,
+            openclaw_config: config,
+          }
+        };
+      });
     } catch (e) {
       console.error(`Failed to sync OpenClaw status for ${name}:`, e);
     }
-  }, [activeProviderId]);
+  }, [activeProviderId, queryClient]);
 
   const syncAgentAuth = useCallback(async (name: string) => {
     try {
@@ -562,22 +361,34 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
       let parsed = {};
       try { parsed = JSON.parse(result?.stdout || "{}"); } catch { /* */ }
 
-      setInstances(prev => prev.map(inst =>
-        inst.name === name ? { ...inst, agentAuth: parsed } : inst
-      ));
+      queryClient.setQueryData(QUERY_KEYS.INSTANCE_POLL(activeProviderId, name), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          appStatus: {
+            ...old.appStatus,
+            agentAuth: parsed,
+          }
+        };
+      });
     } catch (e) {
       console.error(`Failed to sync agent auth for ${name}:`, e);
     }
-  }, [activeProviderId]);
+  }, [activeProviderId, queryClient]);
 
   const appAction = useCallback(async (instanceId: string, action: string) => {
-    return invoke("app_action", {
+    const res = await invoke("app_action", {
       providerId: activeProviderId,
       instanceId,
       appId: activeAppId,
       action,
     });
-  }, [activeProviderId, activeAppId]);
+    // Bust cache if action likely caused state change
+    if (action !== "status") {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCE_POLL(activeProviderId, instanceId) });
+    }
+    return res;
+  }, [activeProviderId, activeAppId, queryClient]);
 
   const readInstanceFile = useCallback(async (instanceId: string, remotePath: string) => {
     return invoke("app_read_file", {
@@ -604,12 +415,12 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
         providerId,
         authJson: JSON.stringify({ type: "api_key", key }, null, 2),
       });
-      setAuthStatus(prev => ({ ...prev, [providerId]: true }));
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH_STATUS() });
     } catch (e) {
       console.error(`Failed to save API key for ${providerId}:`, e);
       throw e;
     }
-  }, []);
+  }, [queryClient]);
 
   const startOAuthFlow = useCallback(async (providerId: string) => {
     // Use the generic PKCE flow (currently only openai-codex)
@@ -644,7 +455,8 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
       }, null, 2),
     });
 
-    setAuthStatus(prev => ({ ...prev, [providerId]: true }));
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH_STATUS() });
+    
     setOauthPkceState(prev => {
       const next = { ...prev };
       delete next[providerId];
@@ -663,7 +475,7 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
         console.error(`Failed to push auth to ${inst.name}:`, e);
       }
     }
-  }, [oauthPkceState, instances, activeProviderId]);
+  }, [oauthPkceState, instances, activeProviderId, queryClient]);
 
   // ─── Context value ─────────────────────────────────────────
 
@@ -672,6 +484,8 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
     activeProviderId,
     activeAppId,
     plugins,
+    activeContext,
+    setActiveContext,
     instances,
     selectedInstance,
     selectedInstanceName,
