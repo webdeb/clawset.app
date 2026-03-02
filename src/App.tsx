@@ -5,6 +5,7 @@ import { AppLayout } from "./components/AppLayout";
 import { ViewRouteWrapper } from "./components/ViewContent";
 import { PluginsContent } from "./components/PluginsContent";
 import { AuthContent } from "./components/AuthContent";
+import { NewInstanceContent } from "./components/NewInstanceContent";
 import { ClawsetProvider } from "./context/ClawsetContext";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ function App() {
             <Route path="/system" element={<Navigate to="/system/plugins" replace />} />
             <Route path="/system/plugins" element={<PluginsContent />} />
             <Route path="/system/auth" element={<AuthContent />} />
+            <Route path="/system/new" element={<NewInstanceContent />} />
 
             {/* Instance context */}
             <Route path="/instance/:instanceName" element={<InstanceContent />} />

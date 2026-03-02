@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, Button, Input, Chip, Spinner } from "@heroui/react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { useClawset, PluginInfo } from "../context/ClawsetContext";
 
 export function PluginsContent() {

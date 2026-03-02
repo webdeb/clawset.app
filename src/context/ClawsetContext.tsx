@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/invoke";
 import { listen } from "@tauri-apps/api/event";
 import { createAuthorizationFlow, exchangeAuthorizationCode } from "../lib/login-codex";
 import { useQueryClient } from "@tanstack/react-query";
@@ -107,9 +107,11 @@ interface ClawsetContextType {
   setSelectedInstanceName: (name: string) => void;
   refreshInstances: () => Promise<void>;
   refreshPlugins: () => Promise<void>;
-  installInstance: (name: string, memory: string, cpus: string, disk: string) => Promise<void>;
+  installInstance: (providerId: string, name: string, memory: string, cpus: string, disk: string) => Promise<void>;
   provisionInstance: (name: string, hostPath: string) => Promise<void>;
   startInstance: (name: string) => Promise<void>;
+  stopInstance: (name: string) => Promise<void>;
+  destroyInstance: (name: string) => Promise<void>;
   syncOpenclawStatus: (name: string) => Promise<void>;
   syncAgentAuth: (name: string) => Promise<void>;
   appAction: (instanceId: string, action: string) => Promise<any>;
@@ -262,15 +264,15 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(PREFERRED_INSTANCE_KEY, name);
   }, []);
 
-  const installInstance = useCallback(async (name: string, memory: string, cpus: string, disk: string) => {
+  const installInstance = useCallback(async (providerId: string, name: string, memory: string, cpus: string, disk: string) => {
     setProvisioningInstanceName(name);
     setProvisionLogs([]);
     try {
       await invoke("instance_create", {
-        providerId: activeProviderId,
+        providerId,
         params: { name, memory, cpus, disk }
       });
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(activeProviderId) });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(providerId) });
       handleSetSelectedInstance(name);
     } catch (error: any) {
       setProvisionLogs(prev => [...prev, `ERROR: ${error}`]);
@@ -312,6 +314,36 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
       // Done
     }
   }, [activeProviderId, queryClient]);
+
+  const stopInstance = useCallback(async (name: string) => {
+    try {
+      await invoke("instance_stop", {
+        providerId: activeProviderId,
+        instanceId: name,
+      });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(activeProviderId) });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCE_POLL(activeProviderId, name) });
+    } finally {
+      // Done
+    }
+  }, [activeProviderId, queryClient]);
+
+  const destroyInstance = useCallback(async (name: string) => {
+    try {
+      if (!activeProviderId) return;
+      await invoke("instance_destroy", {
+        providerId: activeProviderId,
+        instanceId: name,
+      });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INSTANCES(activeProviderId) });
+      if (selectedInstanceName === name) {
+        setSelectedInstanceName(null);
+        setActiveContext("system");
+      }
+    } finally {
+      // Done
+    }
+  }, [activeProviderId, queryClient, selectedInstanceName, setSelectedInstanceName, setActiveContext]);
 
   const syncOpenclawStatus = useCallback(async (name: string) => {
     try {
@@ -502,6 +534,8 @@ export function ClawsetProvider({ children }: { children: ReactNode }) {
     installInstance,
     provisionInstance,
     startInstance,
+    stopInstance,
+    destroyInstance,
     syncOpenclawStatus,
     syncAgentAuth,
     appAction,

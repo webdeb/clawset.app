@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { Card, Button, Input, Slider } from "@heroui/react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { useNavigate } from "react-router-dom";
 import { useClawset } from "../context/ClawsetContext";
 
-export function InstanceProvision() {
-  const { instances, installInstance, provisionLogs, hostResources } = useClawset();
+export function NewInstanceContent() {
+  const { instances, plugins, installInstance, provisionLogs, hostResources } = useClawset();
+  const navigate = useNavigate();
+  
+  const providers = plugins.filter(p => p.type === "instance-provider");
+  const [selectedProvider, setSelectedProvider] = useState<string>(
+    providers.length > 0 ? providers[0].id : ""
+  );
   
   // Max limits (80% of host)
   const hostTotalRamGB = hostResources?.total_memory ? Math.floor(hostResources.total_memory / (1024 ** 3)) : 16;
@@ -13,7 +20,7 @@ export function InstanceProvision() {
 
   const maxRamGB = Math.max(1, Math.floor(hostTotalRamGB * 0.8));
   const maxCpuCount = Math.max(1, Math.floor(hostTotalCpus * 0.8));
-  const maxDiskGB = Math.max(10, Math.floor(hostAvailableDiskGB * 0.8));
+  const maxDiskGB = Math.max(2, Math.floor(hostAvailableDiskGB * 0.8));
 
   // Determine a default sequential instance name (e.g. clawset-1)
   const defaultInstanceName = `clawset-${instances.length + 1}`;
@@ -21,14 +28,14 @@ export function InstanceProvision() {
   const [name, setName] = useState<string>(defaultInstanceName);
   const [memory, setMemory] = useState<number>(2);
   const [cpus, setCpus] = useState<number>(2);
-  const [disk, setDisk] = useState<number>(10);
+  const [disk, setDisk] = useState<number>(2);
   const [folder, setFolder] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Safely clamp values between 1 and their respective maxes to prevent warnings triggering erroneously if defaults exceed host capabilities
+  // Safely clamp values
   const safeMemory = Math.min(Math.max(1, memory), maxRamGB);
   const safeCpus = Math.min(Math.max(1, cpus), maxCpuCount);
-  const safeDisk = Math.min(Math.max(10, disk), maxDiskGB);
+  const safeDisk = Math.min(Math.max(2, disk), maxDiskGB);
 
   const isMemoryHigh = safeMemory >= Math.floor(maxRamGB * 0.8);
   const isCpuHigh = safeCpus >= Math.floor(maxCpuCount * 0.8);
@@ -58,11 +65,13 @@ export function InstanceProvision() {
   };
 
   const handleProvision = async () => {
-    if (!folder || !name.trim()) return;
+    if (!folder || !name.trim() || !selectedProvider) return;
     
     setActionLoading(true);
     try {
-      await installInstance(name, `${safeMemory}G`, `${safeCpus}`, `${safeDisk}G`);
+      await installInstance(selectedProvider, name, `${safeMemory}G`, `${safeCpus}`, `${safeDisk}G`);
+      // Since `installInstance` updates URL context and queries automatically
+      navigate(`/instance/${name}`);
     } catch (e) {
       console.error(e);
     } finally {
@@ -71,18 +80,37 @@ export function InstanceProvision() {
   };
 
   return (
-    <div className="w-screen flex items-start justify-center bg-background text-foreground p-8 overflow-y-auto">
-      <Card className="p-6 w-full max-w-2xl flex flex-col gap-6">
+    <div className="w-full min-h-full flex flex-col items-center bg-background text-foreground p-8">
+      <Card className="w-full max-w-2xl flex flex-col gap-6">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-3">
             Provision New Environment
           </h2>
           <p className="text-default-500 text-sm">
-            Please configure the resources for your secure agent environment.
+            Launch a new environment by picking an instance provider.
           </p>
         </div>
 
         <div className="flex flex-col gap-6 border border-default-200 rounded-lg p-6 bg-default-50/50">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Instance Provider</label>
+            <select
+              value={selectedProvider}
+              onChange={(e) => setSelectedProvider(e.target.value)}
+              disabled={actionLoading || providers.length === 0}
+              className="bg-default-100/50 border border-default-200 rounded-lg text-sm px-3 py-2 outline-none focus:border-primary/50 transition-colors"
+            >
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {providers.length === 0 && (
+              <p className="text-xs text-danger pr-1">
+                No instance providers found. Please install a provider plugin first from System settings.
+              </p>
+            )}
+          </div>
+        
           <div className="flex flex-col gap-2">
              <label className="text-sm font-medium">Instance Profile Name</label>
              <Input 
@@ -154,7 +182,7 @@ export function InstanceProvision() {
              <Slider 
               step={2}
               maxValue={maxDiskGB}
-              minValue={10}
+              minValue={2}
               value={safeDisk}
               onChange={(value) => setDisk(value as number)}
               isDisabled={actionLoading}
@@ -195,9 +223,9 @@ export function InstanceProvision() {
           <Button 
             className="bg-primary text-primary-foreground" 
             onPress={handleProvision} 
-            isDisabled={!folder || !memory || !cpus || !disk || actionLoading}
+            isDisabled={!folder || !name.trim() || !selectedProvider || actionLoading}
           >
-            {actionLoading ? "Provisioning Environment..." : "Provision Environment"}
+            {actionLoading ? "Provisioning Environment..." : "Start Instance"}
           </Button>
         </div>
 
@@ -206,7 +234,7 @@ export function InstanceProvision() {
           <div className="flex flex-col gap-2 mt-4 bg-black/95 border border-default-200 p-4 rounded-lg shadow-sm">
              <div className="flex justify-between items-center mb-1">
                 <span className="text-xs font-semibold text-green-500 animate-pulse">
-                   Installing Environment...
+                   Creating Instance...
                 </span>
              </div>
              <div className="w-full font-mono text-[10px] sm:text-xs text-green-400 overflow-y-auto h-48 text-left whitespace-pre-wrap flex flex-col gap-1">

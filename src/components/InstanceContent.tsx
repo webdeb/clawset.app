@@ -3,8 +3,9 @@ import { useRef, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useClawset } from "../context/ClawsetContext";
 
-import { InstanceProvision } from "./InstanceProvision";
+
 import { InstanceOpenClawStatus } from "./InstanceOpenClawStatus";
+import { DeleteInstanceButton } from "./InstanceActionButtons";
 
 export function InstanceContent() {
   const { selectedInstance, provisionInstance, provisionLogs, provisioningInstanceName, syncOpenclawStatus, syncAgentAuth } = useClawset();
@@ -35,6 +36,8 @@ export function InstanceContent() {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [provisionLogs]);
+
+
 
   const handleProvisionInstance = async () => {
     if (!selectedInstance) return;
@@ -69,7 +72,11 @@ export function InstanceContent() {
   };
   
   if (!selectedInstance) {
-    return <InstanceProvision />;
+    return (
+      <div className="w-full flex justify-center py-12 text-default-400">
+        Instance not found or has been deleted.
+      </div>
+    );
   }
 
   const cpus = selectedInstance.resources?.cpus || selectedInstance.meta?.os || "Unknown";
@@ -80,11 +87,15 @@ export function InstanceContent() {
     <div className="w-full min-h-full flex flex-col items-center bg-background text-foreground p-8">
       <Card className="p-6 w-full max-w-2xl flex flex-col gap-6">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-3">
+          <h2 className="text-2xl font-bold flex items-center gap-3 w-full">
             {selectedInstance.name}
             <Chip size="sm" color={selectedInstance.status === "Running" ? "success" : "default"} variant="soft">
               {selectedInstance.status}
             </Chip>
+            <DeleteInstanceButton 
+              instanceName={selectedInstance.name} 
+              className="ml-auto text-danger border-danger hover:bg-danger/10"
+            />
           </h2>
           <p className="text-default-500 text-sm">{selectedInstance.meta?.os || "Ubuntu"}</p>
         </div>

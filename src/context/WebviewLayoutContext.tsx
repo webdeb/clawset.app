@@ -71,7 +71,7 @@ export function WebviewLayoutProvider({ children }: { children: ReactNode }) {
 
     return {
       x: Math.round(rect.left) + offsetX,
-      y: Math.round(rect.top) + offsetY,
+      y: Math.round(rect.top) + offsetY + 32,
       width: Math.round(rect.width),
       height: Math.round(rect.height),
     };

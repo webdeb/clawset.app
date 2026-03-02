@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation, matchPath } from "react-router-dom";
-import { Button, Spinner, Tabs } from "@heroui/react";
+import { Button, ButtonGroup, Spinner, Tabs } from "@heroui/react";
 import { useClawset } from "../context/ClawsetContext";
 import { WebviewLayoutProvider } from "../context/WebviewLayoutContext";
 import { ContextChat } from "./ContextChat";
@@ -29,7 +29,6 @@ export function AppLayout() {
     instances,
     loading,
     error,
-    startInstance,
     setSelectedInstanceName,
     setActiveContext,
   } = useClawset();
@@ -37,7 +36,6 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const routeContext = useRouteContext();
-  const [actionLoading, setActionLoading] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
 
   const isSystem = routeContext.type === "system";
@@ -58,18 +56,8 @@ export function AppLayout() {
     }
   }, [isSystem, routeContext.instanceName, setActiveContext, setSelectedInstanceName]);
 
-  const handleStartInstance = async () => {
-    if (!contextInstance) return;
-    setActionLoading(true);
-    try {
-      await startInstance(contextInstance.name);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   // ─── Loading state ──────────────────────────────────────────
-  if (loading && instances.length === 0 && !actionLoading) {
+  if (loading && instances.length === 0) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-background text-foreground">
         <Spinner size="lg" />
@@ -107,28 +95,35 @@ export function AppLayout() {
     }
   };
 
+  const switchContext = (ctx: string) => {
+    if (ctx === "system") {
+      navigate("/system/plugins");
+    } else {
+      navigate(`/instance/${ctx}`);
+    }
+  };
+
   // ─── Render ─────────────────────────────────────────────────
   return (
     <div className="w-full h-screen flex flex-col bg-background text-foreground overflow-hidden">
-      {/* Header */}
+      {/* Header (Acts as native macOS Titlebar now with custom Overlay) */}
       <header
-        className="flex flex-row items-center justify-between flex-shrink-0 w-full bg-default-50 border-b border-divider px-4 z-50 relative"
+        data-tauri-drag-region
+        className="flex flex-row items-center justify-between flex-shrink-0 w-full bg-default-50 border-b border-divider pr-4 pl-[72px] z-50 relative"
         style={{ height: HEADER_HEIGHT }}
       >
-        {/* Left: Context name */}
-        <div className="flex items-center gap-4 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold ${isSystem ? "bg-default-200 text-default-600" : "bg-primary/10 text-primary"}`}>
-              {isSystem ? "⚙" : (routeContext.instanceName || "").slice(0, 2).toUpperCase()}
-            </span>
-            <h1 className="text-sm font-semibold leading-none">
-              {isSystem ? "System" : routeContext.instanceName}
-            </h1>
-          </div>
-        </div>
+        {/* Center Absolute: Clawset Logo (Centered natively in window) */}
+        {/* <div data-tauri-drag-region className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 text-default-400 pointer-events-none select-none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+          <span className="text-xs font-bold tracking-widest uppercase opacity-80">Clawset</span>
+        </div> */}
+        {/* Left: Tabs */}
+        <div className="flex items-center gap-6 flex-1 z-10">
 
-        {/* Center: Context-dependent tabs */}
-        <div className="flex-1 flex items-center justify-center">
+          {/* Context-dependent tabs */}
+          <div className="flex items-center">
           {isProviderAvailable && (
             <Tabs className="max-h-8" selectedKey={getActiveTab()} onSelectionChange={(key) => handleTabChange(key as string)}>
               <Tabs.ListContainer>
@@ -161,39 +156,51 @@ export function AppLayout() {
               </Tabs.ListContainer>
             </Tabs>
           )}
+          </div>
         </div>
 
-        {/* Right: Status + Actions */}
+        {/* Right: Context indicator + Status + Actions */}
         <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Context Switcher ROW */}
+          <div className="flex items-center gap-2 mr-2 pr-4 select-none" data-tauri-drag-region>
+            <ButtonGroup size="sm" variant="ghost" className="h-7">
+              {/* Instance icons */}
+              {instances.map((inst) => (
+                <Button
+                  key={inst.name}
+                  onPress={() => switchContext(inst.name)}
+                  variant="ghost"
+                  className={routeContext.instanceName === inst.name ? "text-primary border-primary font-bold relative px-2 min-w-10" : "font-bold relative px-2 min-w-10 opacity-50 text-default-600"}
+                >
+                  {inst.name}
+                  {/* Status dot */}
+                  <span
+                    className={`ml-1 w-1.5 h-1.5 rounded-full border border-default-50 ${
+                      inst.status === "Running" ? "bg-success" : "bg-danger"
+                    }`}
+                  />
+                </Button>
+              ))}
+                <Button
+                  onPress={() => switchContext("system")}
+                  variant="ghost"
+                  className={isSystem ? "text-primary border-primary" : "opacity-50"}
+                  aria-label="System"
+                >
+                  System
+                </Button>
+            </ButtonGroup>
+            <Button size="sm" variant="ghost" className="h-7 px-3 bg-default-100 hover:bg-default-200 ml-1 font-semibold" onPress={() => navigate("/system/new")}>
+              New
+            </Button>
+          </div>
+
           {!isProviderAvailable && (
             <div className="bg-danger/10 text-danger px-3 py-1 rounded text-xs font-semibold flex items-center">
               No Provider
             </div>
           )}
 
-          {isProviderAvailable && !isSystem && contextInstance && (
-            <>
-              {openclawStatus === "Stopped" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  isPending={actionLoading}
-                  onPress={handleStartInstance}
-                  className="h-7 min-h-7 text-[11px] bg-primary/10 text-primary"
-                >
-                  Start
-                </Button>
-              )}
-
-              <div className="flex items-center gap-1.5">
-                {openclawStatus === "Running" && <span className="w-2 h-2 rounded-full bg-success" />}
-                {openclawStatus === "Stopped" && <span className="w-2 h-2 rounded-full bg-danger" />}
-                <span className="text-[11px] font-medium text-default-500">
-                  {actionLoading ? <Spinner size="sm" /> : openclawStatus}
-                </span>
-              </div>
-            </>
-          )}
 
           {error && (
             <div className="text-danger text-[10px] bg-danger/10 px-2 py-0.5 rounded">
@@ -206,18 +213,18 @@ export function AppLayout() {
       {/* Main: Chat + Content */}
       <WebviewLayoutProvider>
         <div className="flex-1 flex overflow-hidden">
-          {/* Left: ContextChat */}
+          {/* Left/Center: Tab Content */}
+          <main className="flex-1 bg-transparent relative">
+            <div className="absolute inset-0 overflow-y-auto">
+              <Outlet />
+            </div>
+          </main>
+
+          {/* Right: ContextChat Sidebar */}
           <ContextChat
             collapsed={chatCollapsed}
             onToggle={() => setChatCollapsed(!chatCollapsed)}
           />
-
-          {/* Right: Tab Content */}
-          <main className="flex-1 bg-transparent overflow-hidden relative">
-            <div className="absolute inset-0">
-              <Outlet />
-            </div>
-          </main>
         </div>
       </WebviewLayoutProvider>
     </div>
